@@ -1,9 +1,6 @@
 
 
-try:
-    from polyinterface import Node,LOGGER
-except ImportError:
-    from pgc_interface import Node,LOGGER
+from udi_interface import Node,LOGGER
     
 from copy import deepcopy
 from const import driversMap,windMap
@@ -11,14 +8,15 @@ from node_funcs import *
 
 class Weather(Node):
     def __init__(self, controller, primary, address, name, useCelsius, forecast):
-        super().__init__(controller, primary, address, name)
+        super().__init__(controller.poly, primary, address, name)
         self.type = 'forecast' if forecast else 'weather'
         self.forecastNum = 1 if forecast else 0
         self.useCelsius = useCelsius
         self.id = 'EcobeeWeatherC' if self.useCelsius else 'EcobeeWeatherF'
         self.drivers = self._convertDrivers(driversMap[self.id]) if self.controller._cloud else deepcopy(driversMap[self.id])
+        controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
 
-    def start(self):
+    def handler_start(self):
         self.query()
 
     def update(self, weather):

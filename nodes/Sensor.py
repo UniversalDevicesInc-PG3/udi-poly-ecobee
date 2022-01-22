@@ -1,9 +1,6 @@
 
 
-try:
-    from polyinterface import Node,LOGGER
-except ImportError:
-    from pgc_interface import Node,LOGGER
+from udi_interface import Node,LOGGER
 
 from copy import deepcopy
 from const import driversMap
@@ -11,14 +8,15 @@ from node_funcs import *
 
 class Sensor(Node):
     def __init__(self, controller, primary, address, name, id, parent):
-      super().__init__(controller, primary, address, name)
+      super().__init__(controller.poly, primary, address, name)
       self.type = 'sensor'
       # self.code = code
       self.parent = parent
       self.id = id
       self.drivers = self._convertDrivers(driversMap[self.id]) if self.controller._cloud else deepcopy(driversMap[self.id])
+      controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
 
-    def start(self):
+    def handler_start(self):
       self.query()
 
     def update(self, sensor):

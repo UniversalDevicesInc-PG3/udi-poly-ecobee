@@ -2,11 +2,11 @@
   <editor id="BOOL">
     <range uom="2" subset="0,1" />
   </editor>
-  <editor id="I_DEBUG">
-    <range uom="25" subset="8,9,10,20,30,40,50" nls="CDM"/>
-  </editor>
   <editor id="I_BACKLIGHT">
     <range uom="56" subset="0-10"/>
+  </editor>
+  <editor id="cst">
+    <range uom="25" subset="0,1,2" nls="CST"/>
   </editor>
 
   <!-- io_guy Ecobee models -->
