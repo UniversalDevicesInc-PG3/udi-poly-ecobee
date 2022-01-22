@@ -1,9 +1,6 @@
 import sys
 import re
-try:
-    from polyinterface import Node,LOGGER
-except ImportError:
-    from pgc_interface import Node,LOGGER
+from udi_interface import Node,LOGGER
 from copy import deepcopy
 import json
 from node_funcs import *
@@ -44,7 +41,8 @@ class Thermostat(Node):
         self._gcidx = {}
         # We track our driver values because we need the value before it's been pushed.
         self.driver = dict()
-        super(Thermostat, self).__init__(controller, primary, address, name)
+        super().__init__(controller.poly, primary, address, name)
+        controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
 
     def set_driver(self,driver,value):
         self.driver[driver] = value
@@ -55,11 +53,11 @@ class Thermostat(Node):
           try:
             self.driver[driver] = self.getDriver(driver)
           except:
-            self.l_error('get_dirver','does not exist {}'.format(driver))
+            LOGGER.error('does not exist {}'.format(driver))
             return None
         return self.driver[driver]
 
-    def start(self):
+    def handler_start(self):
         if 'remoteSensors' in self.tstat:
             #LOGGER.debug("{}:remoteSensors={}".format(self.address,json.dumps(self.tstat['remoteSensors'], sort_keys=True, indent=2)))
             for sensor in self.tstat['remoteSensors']:
@@ -153,11 +151,11 @@ class Thermostat(Node):
           return 'EcobeeSensor{}{}'.format(HorN,CorF)
 
     def update(self, revData, fullData):
-      self.l_debug('update','')
+      LOGGER.debug('')
       #LOGGER.debug("fullData={}".format(json.dumps(fullData, sort_keys=True, indent=2)))
       #LOGGER.debug("revData={}".format(json.dumps(revData, sort_keys=True, indent=2)))
       if not 'thermostatList' in fullData:
-        self.l_error('update',"No thermostatList in fullData={}".format(json.dumps(fullData, sort_keys=True, indent=2)))
+        LOGGER.error("No thermostatList in fullData={}".format(json.dumps(fullData, sort_keys=True, indent=2)))
         return False
       self.revData = revData
       self.fullData = fullData
@@ -171,7 +169,7 @@ class Thermostat(Node):
       equipmentStatus = self.tstat['equipmentStatus'].split(',')
       #LOGGER.debug("settings={}".format(json.dumps(self.settings, sort_keys=True, indent=2)))
       self.runtime = self.tstat['runtime']
-      self.l_debug('_update:',' runtime={}'.format(json.dumps(self.runtime, sort_keys=True, indent=2)))
+      LOGGER.debug(' runtime={}'.format(json.dumps(self.runtime, sort_keys=True, indent=2)))
       clihcs = 0
       for status in equipmentStatus:
         if status in equipmentStatusMap:
@@ -182,17 +180,17 @@ class Thermostat(Node):
       # And the default mode, unless there is an event
       self.clismd = 0
       # Is there an active event?
-      self.l_debug('_update','events={}'.format(json.dumps(self.events, sort_keys=True, indent=2)))
+      LOGGER.debug('events={}'.format(json.dumps(self.events, sort_keys=True, indent=2)))
       # Find the first running event
       event_running = False
       for event in self.events:
           if event['running'] and event_running is False:
               event_running = event
-              self.l_debug('_update','running event: {}'.format(json.dumps(event, sort_keys=True, indent=2)))
+              LOGGER.debug('running event: {}'.format(json.dumps(event, sort_keys=True, indent=2)))
       if event_running is not False:
         if event_running['type'] == 'hold':
             #LOGGER.debug("Checking: events={}".format(json.dumps(self.events, sort_keys=True, indent=2)))
-            self.l_debug('_update'," #events={} type={} holdClimateRef={}".
+            LOGGER.debug(" #events={} type={} holdClimateRef={}".
                          format(len(self.events),
                                 event_running['type'],
                                 event_running['holdClimateRef']))
@@ -210,23 +208,23 @@ class Thermostat(Node):
             # name will alwys smartAway or smartAway?
             climateType = event_running['name']
             if climateType != 'smartAway':
-                self.l_error('_update','autoAway event name is "{}" which is not supported, using smartAway. Please notify developer.'.format(climateType))
+                LOGGER.error('autoAway event name is "{}" which is not supported, using smartAway. Please notify developer.'.format(climateType))
                 climateType = 'smartAway'
         elif event_running['type'] == 'autoHome':
             # name will alwys smartAway or smartHome?
             climateType = event_running['name']
             if climateType != 'smartHome':
-                self.l_error('_update','autoHome event name is "{}" which is not supported, using smartHome. Please notify developer.'.format(climateType))
+                LOGGER.error('autoHome event name is "{}" which is not supported, using smartHome. Please notify developer.'.format(climateType))
                 climateType = 'smartHome'
         elif event_running['type'] == 'demandResponse':
             # What are thse names?
             climateType = event_running['name']
-            self.l_error('_update','demandResponse event name is "{}" which is not supported, using demandResponse. Please notify developer.'.format(climateType))
+            LOGGER.error('demandResponse event name is "{}" which is not supported, using demandResponse. Please notify developer.'.format(climateType))
             climateType = 'demandResponse'
         else:
-            self.l_error('_update','Unknown event type "{}" name "{}" for event: {}'.format(event_running['type'],event_running['name'],event))
+            LOGGER.error('Unknown event type "{}" name "{}" for event: {}'.format(event_running['type'],event_running['name'],event))
 
-      self.l_debug('_update','climateType={}'.format(climateType))
+      LOGGER.debug('climateType={}'.format(climateType))
       #LOGGER.debug("program['climates']={}".format(self.program['climates']))
       #LOGGER.debug("settings={}".format(json.dumps(self.settings, sort_keys=True, indent=2)))
       #LOGGER.debug("program={}".format(json.dumps(self.program, sort_keys=True, indent=2)))
@@ -236,10 +234,10 @@ class Thermostat(Node):
         clifrs = 1
       else:
         clifrs = 0
-      self.l_debug('_update','clifrs={} (equipmentStatus={} or clihcs={}, fanControlRequired={}'
+      LOGGER.debug('clifrs={} (equipmentStatus={} or clihcs={}, fanControlRequired={}'
                    .format(clifrs,equipmentStatus,clihcs,self.settings['fanControlRequired'])
                    )
-      self.l_debug('_update','backlightOnIntensity={} backlightSleepIntensisty={}'.
+      LOGGER.debug('backlightOnIntensity={} backlightSleepIntensisty={}'.
                     format(self.settings['backlightOnIntensity'],self.settings['backlightSleepIntensity']))
       updates = {
         'ST': self.tempToDriver(self.runtime['actualTemperature'],True,False),
@@ -262,7 +260,7 @@ class Thermostat(Node):
         'GV11': self.settings['backlightSleepIntensity']
       }
       for key, value in updates.items():
-          self.l_debug('_update','set_driver({},{})'.format(key,value))
+          LOGGER.debug('set_driver({},{})'.format(key,value))
           self.set_driver(key, value)
 
       # Update my remote sensors.
@@ -401,7 +399,7 @@ class Thermostat(Node):
             self.setFanState(0)
 
     def pushBacklight(self,val):
-        self.l_debug('pushBacklight','{}'.format(val))
+        LOGGER.debug('{}'.format(val))
         #
         # Push settings test
         #
@@ -419,7 +417,7 @@ class Thermostat(Node):
       self.set_driver('GV10', val)
 
     def pushBacklightSleep(self,val):
-        self.l_debug('pushBacklightSleep','{}'.format(val))
+        LOGGER.debug('{}'.format(val))
         #
         # Push settings test
         #
