@@ -237,7 +237,7 @@ class Controller(Node):
     def handler_nsdata(self, key, data):
         LOGGER.debug(f"key={key} data={data}")
         if data is None:
-            LOGGER.warning("No NSDATA... Must be running locally")
+            LOGGER.warning(f"No NSDATA... Must be running locally key={key} data={data}")
             self.handler_nsdata_st = False
             return
         if 'nsdata' in key:
@@ -254,7 +254,7 @@ class Controller(Node):
         try:
             #jdata = json.loads(data)
             if self.use_oauth:
-                self.api_key = data['api_key']
+                self.api_key = data['api_key_oauth']
             else:
                 self.api_key = data['api_key_pin']
         except:

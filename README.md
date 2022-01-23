@@ -1,8 +1,28 @@
 # Ecobee Poly
 
+## Help
+
+If you have any issues are questions you can ask on [PG3 Ecobee NS SubForum](https://forum.universal-devices.com/forum/322-ecobee/) or report an issue at [PG3 Ecobee Github issues](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues).
+
+## Moving from PG2
+
+There are a few ways to move
+
+### Backup and Restore
+
+The best way to move from PG2 to PG3 is to backup on PG2 and restore on PG3, but the only option is to do all your nodeservers at once, and it's not really necessary for this nodeserver because it doesn't have any configuration data to setup.  I don't have much information on this method, if you have questions please ask on the PG3 forum.
+
+### Delete and add
+
+If you can't or don't want backup/restore then you can delete the NS on PG2 and install on the same slot on PG2.  You will just need to go thru the authorization procedure again, and change any user settable options on your nodes.  All node addresses will stay the same so all your programs should work after doing an update and save on each one, or rebooting the ISY, especially any using the Controller node since it's ST value has changed.
+
+### Add then delete
+
+Another option is to install in a new slot then go edit all your programs and scenes that reference the nodes and switch to the new slots. If you have customized any settings on the nodes you will need to configure those as well. 
+
 ## Installation
 
-Install through the NodeServer Store
+Install from the Polyglot 3 store.
 
 ### Initial setup
 
@@ -12,8 +32,7 @@ Install through the NodeServer Store
 1. The nodeserver will check every 60 seconds that you have completed the approval so do not restart the nodeserver. You can monitor the log to see when the approval is recognized.
 1. Your thermostat will be added to ISY, along with nodes for any sensors, a node for the current weather, and a node for the forecast.
 
-After the first run. It will refresh any changes every 3 minutes. This is
-a limitation imposed by Ecobee.
+After the first run. It will refresh any changes every 3 minutes. This is a limitation imposed by Ecobee.
 
 ## Settings
 
@@ -45,28 +64,12 @@ See https://forum.universal-devices.com/topic/25016-polyglot-nodeserver-monitori
 When a new release is published, it should be released to the polyglot web store within an hour, currently around 40 minutes past the hour.
 
 1. Open the Polyglot web page
-  1. Go to nodeserver store and click "Update" for "Ecobee"
-  1. Wait for the update completed notice
-  1. Go to the dashboard, select Details for the Ecobee Nodeserver
-  1. Click Restart
+  1. Go to the Dashboard for the ISY and Restart the NS
+  1. In the future there will be an upgrade button for major and minor changes, only patch changes will be automatic
 1. If the release has a (Profile Change) then the profile will be updated automatically but if you had the Admin Console open, you will need to close and open it again.
 
-### Manual Upgrade
-
-If you already have it installed and want the update before it's in the store.
-1. Polisy: cd /var/spolyglot/nodeservers/Ecobee
-1. Others: cd ~/.polyglot/nodeservers/Ecobee
-1. git pull
-1. Go to the polyglot dashboard, select Details for the Ecobee Nodeserver
-1. Click Restart
 
 ## Release Notes
-
-__IMPORTANT__ Starting with version 2.2.0 users should to re-authorize 
-  - Go to ecobee.com -> My Apps -> Remove App for the current UDI
-  - Local: Update in the store and restart
-  - Polyglot Cloud: Restart
-  - After restarting you may get a message in the Polyglot UI saying that the token is invalid, but has not some number of seconds remaining, so you will need to let it expire then you will be asked to re-authorize
 
 - 3.0.0: Jimbo 01/22/2022
   - Initial PG3 release, not tested from store yet...
