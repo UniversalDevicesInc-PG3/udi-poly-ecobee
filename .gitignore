@@ -75,3 +75,4 @@ polyinterface
 climates.json
 profile/*/custom*.xml
 profile/nls/en_us.txt
+*.zip
