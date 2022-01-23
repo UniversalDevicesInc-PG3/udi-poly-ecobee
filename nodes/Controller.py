@@ -42,6 +42,7 @@ class Controller(Node):
         self.n_queue = []
         self.debug_level = 0
         #
+        self.handler_config_st      = None
         self.handler_config_done_st = None
         self.handler_params_st      = None
         self.handler_nsdata_st      = None
@@ -53,6 +54,7 @@ class Controller(Node):
         #self.TypedParameters = Custom(poly, 'customtypedparams')
         #self.TypedData       = Custom(poly, 'customtypeddata')
         poly.subscribe(poly.START,             self.handler_start, address) 
+        poly.subscribe(poly.CONFIG,            self.handler_config)
         poly.subscribe(poly.POLL,              self.handler_poll)
         poly.subscribe(poly.DISCOVER,          self.discover)
         poly.subscribe(poly.STOP,              self.handler_stop)
@@ -100,8 +102,8 @@ class Controller(Node):
         cnt = 10
         while ((self.handler_config_done_st is None or self.handler_params_st is None
              or self.handler_nsdata_st      is None or self.handler_data_st   is None)
-             and cnt > 0):
-            LOGGER.warning(f'Waiting for all to be loaded config={self.handler_config_done_st} params={self.handler_params_st} data={self.handler_data_st} nsdata={self.handler_nsdata_st}... cnt={cnt}')
+             or self.handler_config_st      is None and cnt > 0):
+            LOGGER.warning(f'Waiting for all to be loaded config={self.handler_config_st} config_done={self.handler_config_done_st} params={self.handler_params_st} data={self.handler_data_st} nsdata={self.handler_nsdata_st}... cnt={cnt}')
             time.sleep(1)
             cnt -= 1
         if cnt == 0:
@@ -140,10 +142,15 @@ class Controller(Node):
         self.discover()
         LOGGER.debug('done')
 
+    def handler_config(self, cfg_data):
+        LOGGER.info(f'cfg_data={cfg_data}')
+        self.cfg_longPoll = int(cfg_data['longPoll'])
+        self.handler_config_st = True
+
     def handler_config_done(self):
         LOGGER.info('enter')
-        self.poly.addLogLevel('DEBUG_MODULES',9,'Debug + Session')
-        self.poly.addLogLevel('DEBUG_MODULES',8,'Debug + Session Verbose')
+        self.poly.addLogLevel('DEBUG_SESSION',9,'Debug + Session')
+        self.poly.addLogLevel('DEBUG_SESSION_VERBOSE',8,'Debug + Session Verbose')
         self.handler_config_done_st = True
         LOGGER.info('exit')
 
@@ -161,6 +168,7 @@ class Controller(Node):
             LOGGER.debug("{}:shortPoll: Skipping since discover is still running".format(self.address))
             return
         if self.waiting_on_tokens is False:
+            LOGGER.debug("Nothing to do...")
             return
         elif self.waiting_on_tokens == "OAuth":
             LOGGER.debug("{}:shortPoll: Waiting for user to authorize...".format(self.address))
@@ -168,7 +176,7 @@ class Controller(Node):
             # Must be waiting on our PIN Authorization
             LOGGER.debug("{}:shortPoll: Try to get tokens...".format(self.address))
             if self._getTokens(self.waiting_on_tokens):
-                self.removeNoticesAll()
+                self.Notices.clear()
                 LOGGER.info("shortPoll: Calling discover now that we have authorization...")
                 self.discover()
 
@@ -284,7 +292,7 @@ class Controller(Node):
                 LOGGER.info(f'Got api_key from user params {self.api_key_param}')
                 if self.handler_params_st is not None:
                     # User changed pin, do authorize
-                    self.authorize()
+                    self.authorize("New user pin detected, will re-authorize...")
 
         self.handler_params_st = st
         LOGGER.debug(f'exit: st={st}')
@@ -298,14 +306,15 @@ class Controller(Node):
         else:
             st = False
         LOGGER.debug(f'exit: st={st}')
+        return st
 
-    def authorize(self):
+    def authorize(self,message):
         if self.api_key is None:
             msg = "api_key is not defined, must be running local version or there was an error retreiving it from PG3? Must fix or add custom param for local"
             LOGGER.error(msg)
             self.Notices['authorize'] = msg
             return
-        self.Notices.delete('authorize')
+        self.Notices['authorize'] = message
         if self.use_oauth is True:
             self._getOAuth()
         else:
@@ -313,12 +322,12 @@ class Controller(Node):
 
     def _reAuth(self, reason):
         # Need to re-auth!
-        msg = f"Must Re-Authorize because {reason}"
-        self.Notices['reauth'] = msg
-        LOGGER.error(msg)
-        if not 'access_toekn' in self.Data:
-            LOGGER.error('No tokenData in Data: {}'.format(self.Data))
-        self.authorize()
+        if self.tokenData is None or not 'access_toekn' in self.tokenData:
+            LOGGER.error(f'No existing tokenData in Data: {self.tokenData}')
+            # Save the old token for debug
+            self.Data['tokenData_old'] = self.tokenData
+        self.tokenData = {}
+        self.authorize(f"Must Re-Authorize because {reason}")
 
     def _getPin(self):
         # Ask Ecobee for our Pin and present it to the user in a notice
@@ -401,7 +410,7 @@ class Controller(Node):
             exp_d = self._expire_delta()
             if exp_d is not False:
                 # We allow for 10 long polls to refresh the token...
-                if exp_d.total_seconds() < int(self.polyConfig['longPoll']) * 10:
+                if exp_d.total_seconds() < self.cfg_longPoll * 10:
                     LOGGER.info('Tokens {} expires {} will expire in {} seconds, so refreshing now...'.format(self.tokenData['refresh_token'],self.tokenData['expires'],exp_d.total_seconds()))
                     return self._getRefresh()
                 else:
@@ -412,7 +421,7 @@ class Controller(Node):
                         if md.total_seconds() < 60:
                             sd = False
                     if sd:
-                        LOGGER.debug(0,'Tokens valid until: {} ({} seconds, longPoll={})'.format(self.tokenData['expires'],exp_d.seconds,int(self.polyConfig['longPoll'])))
+                        LOGGER.debug('Tokens valid until: {} ({} seconds, longPoll={})'.format(self.tokenData['expires'],exp_d.seconds,self.cfg_longPoll))
                     self.msgi['ctdt'] = datetime.now()
                     self.set_auth_st(True)
                     return True
@@ -426,18 +435,18 @@ class Controller(Node):
     # This is only called when refresh fails, when it works saveTokens clears
     # it, otherwise we get_ a race on who's customData is saved...
     def _endRefresh(self,refresh_data=False):
+        LOGGER.debug('enter')
         if refresh_data is not False:
             if 'expires_in' in refresh_data:
                 ts = time.time() + refresh_data['expires_in']
                 refresh_data['expires'] = datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%S")
-            # And save in our variable for checking, unless in test mode...
-            if not test:
-                self.token = deepcopy(refresh_data)
+            self.token = deepcopy(refresh_data)
             self.set_auth_st(True)
             self.Notices.clear()
             # Save new token data in customData
             self.Data['tokenData'] = refresh_data
         self.refreshingTokens = False
+        LOGGER.debug('exit')
 
     def _getRefresh(self):
         if 'refresh_token' in self.tokenData:
@@ -528,7 +537,7 @@ class Controller(Node):
                 msg = 'Nodeserver exiting because {}, please restart when you are ready to authorize.'.format(res_data['error'])
                 LOGGER.error('_getTokens: {}'.format(msg))
                 self.waiting_on_tokens = False
-                self.removeNoticesAll()
+                self.Notices.clear()
                 self.Notices['getTokens'] = msg
                 self.exit()
             return False
@@ -538,7 +547,7 @@ class Controller(Node):
             self.Notices.clear()
             self.Notices['getTokens'] = 'Tokens obtained!'
             # Save pin_code
-            if not pin_code in self.Data or self.Data['pin_code'] != pinData['code']:
+            if not self.Data.get('pin_code') != pinData['code']:
                self.Data['pin_code'] = pinData['code']
             self._endRefresh(res_data)
             return True
@@ -592,7 +601,8 @@ class Controller(Node):
 
     def discover(self, *args, **kwargs):
         if not self.authorized():
-            self.authorize() 
+            self.authorize("Tried to discover but not authorized") 
+            return False
         # True means we are in dsocvery
         if self.in_discover:
             LOGGER.info('Discovering Ecobee Thermostats already running?')
@@ -632,7 +642,7 @@ class Controller(Node):
                 if fullData is not False:
                     tstat = fullData['thermostatList'][0]
                     useCelsius = True if tstat['settings']['useCelsius'] else False
-                    self.poly.addNode(Thermostat(self, address, address, thermostatId,
+                    self.add_node(Thermostat(self, address, address, thermostatId,
                                             'Ecobee - {}'.format(get_valid_node_name(thermostat['name'])),
                                             thermostat, fullData, useCelsius))
         return True
@@ -655,17 +665,16 @@ class Controller(Node):
         #
         # Set Default profile version if not Found
         #
-        cdata = deepcopy(self.polyConfig['customData'])
         LOGGER.info('check_profile: profile_info={}'.format(self.profile_info))
-        LOGGER.info('check_profile:   customData={}'.format(cdata))
-        if not 'profile_info' in cdata:
+        LOGGER.info('check_profile:   customData={}'.format(self.Data))
+        if not 'profile_info' in self.Data:
             update_profile = True
-        elif self.profile_info['version'] == cdata['profile_info']['version']:
+        elif self.profile_info['version'] == self.Data['profile_info']['version']:
             # Check if the climates are different
             update_profile = False
             LOGGER.info('check_profile: update_profile={} checking climates.'.format(update_profile))
-            if 'climates' in cdata:
-                current = cdata['climates']
+            if 'climates' in self.Data:
+                current = self.Data['climates']
                 if not update_profile:
                     # Check if the climates have changed.
                     for id in climates:
@@ -769,7 +778,7 @@ class Controller(Node):
                 return res
             if res['data'] is False:
                 return False
-            LOGGER.debug( 0, 'res={}'.format(res))
+            LOGGER.debug('res={}'.format(res))
             if not 'status' in res['data']:
                 return res
             res_st_code = int(res['data']['status']['code'])
@@ -866,8 +875,10 @@ class Controller(Node):
                                        }
                                }
                            )
-        LOGGER.debug(0,'done'.format(id))
-        LOGGER.debug(1,'data={}'.format(res))
+        if self.debug_level >= 0:
+            LOGGER.debug(f'done {id}')
+        if self.debug_level >= 1:
+            LOGGER.debug(f'data={res}')
         if res is False or res is None:
             return False
         return res['data']

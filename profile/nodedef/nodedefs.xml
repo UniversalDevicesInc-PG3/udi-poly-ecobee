@@ -12,8 +12,6 @@
         <cmd id="DOF" />
       </sends>
       <accepts>
-        <cmd id="DISCOVER" />
-        <cmd id="UPLOAD_PROFILE" />
         <cmd id="POLL" />
         <cmd id="QUERY" />
       </accepts>

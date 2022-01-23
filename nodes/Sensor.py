@@ -13,7 +13,7 @@ class Sensor(Node):
       # self.code = code
       self.parent = parent
       self.id = id
-      self.drivers = self._convertDrivers(driversMap[self.id]) if self.controller._cloud else deepcopy(driversMap[self.id])
+      self.drivers = deepcopy(driversMap[self.id])
       controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
 
     def handler_start(self):
