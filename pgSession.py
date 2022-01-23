@@ -42,14 +42,16 @@ class pgSession():
 
     def get(self,path,payload,auth=None):
         url = "https://{}{}/{}".format(self.host,self.port_s,path)
-        self.l_debug('get',0,"Sending: url={0} payload={1}".format(url,payload))
+        if self.debug_level <= 0:
+            self.logger.debug("Sending: url={0} payload={1}".format(url,payload))
         # No speical headers?
         headers = {
             "Content-Type": "application/json"
         }
         if auth is not None:
             headers['Authorization'] = auth
-        self.l_debug('get', 1, "headers={}".format(headers))
+        if self.debug_level <= 1:
+            self.logger.debug("headers={}".format(headers))
         # Some are getting unclosed socket warnings due to garbage collection?? no idea why, so just ignore them since we dont' care
         warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*<socket.socket.*>")
         #self.session.headers.update(headers)
@@ -60,43 +62,45 @@ class pgSession():
                 headers=headers,
                 timeout=(61,10)
             )
-            self.l_debug('get', 1, "url={}".format(response.url))
+            if self.debug_level <= 1:
+                self.logger.debug("url={}".format(response.url))
         # This is supposed to catch all request excpetions.
         except requests.exceptions.RequestException as e:
-            self.l_error('get',"Connection error for %s: %s" % (url, e))
+            self.logger.error("Connection error for %s: %s" % (url, e))
             return False
         return(self.response(response,'get'))
 
     def response(self,response,name):
         fname = 'reponse:'+name
-        self.l_debug(fname,0,' Got: code=%s' % (response.status_code))
-        self.l_debug(fname,2,'      text=%s' % (response.text))
+        self.logger.debug(' Got: code=%s' % (response.status_code))
+        if self.debug_level <= 2:
+            self.logger.debug('      text=%s' % (response.text))
         json_data = False
         st = False
         if response.status_code == 200:
-            self.l_debug(fname,0,' All good!')
+            self.logger.debug(' All good!')
             st = True
         elif response.status_code == 400:
-            self.l_error(fname,"Bad request: %s: text: %s" % (response.url,response.text) )
+            self.logger.error("Bad request: %s: text: %s" % (response.url,response.text) )
         elif response.status_code == 404:
-            self.l_error(fname,"Not Found: %s: text: %s" % (response.url,response.text) )
+            self.logger.error("Not Found: %s: text: %s" % (response.url,response.text) )
         elif response.status_code == 401:
             # Authentication error
-            self.l_error(fname,"Unauthorized: %s: text: %s" % (response.url,response.text) )
+            self.logger.error("Unauthorized: %s: text: %s" % (response.url,response.text) )
         elif response.status_code == 500:
-            self.l_error(fname,"Server Error: %s %s: text: %s" % (response.status_code,response.url,response.text) )
+            self.logger.error("Server Error: %s %s: text: %s" % (response.status_code,response.url,response.text) )
         elif response.status_code == 522:
-            self.l_error(fname,"Timeout Error: %s %s: text: %s" % (response.status_code,response.url,response.text) )
+            self.logger.error("Timeout Error: %s %s: text: %s" % (response.status_code,response.url,response.text) )
         else:
-            self.l_error(fname,"Unknown response %s: %s %s" % (response.status_code, response.url, response.text) )
-            self.l_error(fname,"Check system status: https://status.ecobee.com/")
+            self.logger.error("Unknown response %s: %s %s" % (response.status_code, response.url, response.text) )
+            self.logger.error("Check system status: https://status.ecobee.com/")
         # No matter what, return the code and error
         try:
             json_data = json.loads(response.text)
         except (Exception) as err:
             # Only complain about this error if we didn't have an error above
             if st:
-                self.l_error(fname,'Failed to convert to json {0}: {1}'.format(response.text,err), exc_info=True)
+                self.logger.error('Failed to convert to json {0}: {1}'.format(response.text,err), exc_info=True)
             json_data = False
         return { 'code': response.status_code, 'data': json_data }
 
@@ -104,7 +108,7 @@ class pgSession():
         url = "https://{}{}/{}".format(self.host,self.port_s,path)
         if dump:
             payload = json.dumps(payload)
-        self.l_debug('post',0,"Sending: url={0} payload={1}".format(url,payload))
+        self.logger.debug("Sending: url={0} payload={1}".format(url,payload))
         headers = {
             'Content-Length': str(len(payload))
         }
@@ -112,7 +116,8 @@ class pgSession():
             headers['Content-Type'] = 'application/json'
         if auth is not None:
             headers['Authorization'] = auth
-        self.l_debug('post', 1, "headers={}".format(headers))
+        if self.debug_level <= 1:
+            self.logger.debug("headers={}".format(headers))
         #self.session.headers.update(headers)
         # Some are getting unclosed socket warnings due to garbage collection?? no idea why, so just ignore them since we dont' care
         warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*<socket.socket.*>")
@@ -124,23 +129,25 @@ class pgSession():
                 headers=headers,
                 timeout=(61,10)
             )
-            self.l_debug('post', 1, "url={}".format(response.url))
+            if self.debug_level <= 1:
+                self.logger.debug("url={}".format(response.url))
         # This is supposed to catch all request excpetions.
         except requests.exceptions.RequestException as e:
-            self.l_error('post',"Connection error for %s: %s" % (url, e))
+            self.logger.error("Connection error for %s: %s" % (url, e))
             return False
         return(self.response(response,'post'))
 
     def delete(self,path,auth=None):
         url = "https://{}{}/{}".format(self.host,self.port_s,path)
-        self.l_debug('delete',0,"Sending: url={0}".format(url))
+        self.logger.debug("Sending: url={0}".format(url))
         # No speical headers?
         headers = {
             "Content-Type": "application/json"
         }
         if auth is not None:
             headers['Authorization'] = auth
-        self.l_debug('delete', 1, "headers={}".format(headers))
+        if self.debug_level <= 1:
+            self.logger.debug("headers={}".format(headers))
         # Some are getting unclosed socket warnings due to garbage collection?? no idea why, so just ignore them since we dont' care
         warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*<socket.socket.*>")
         #self.session.headers.update(headers)
@@ -150,25 +157,12 @@ class pgSession():
                 headers=headers,
                 timeout=(61,10)
             )
-            self.l_debug('delete', 1, "url={}".format(response.url))
+            if self.debug_level <= 1:
+                self.logger.debug("url={}".format(response.url))
             self.logger.debug('delete got: {}'.format(response))
         # This is supposed to catch all request excpetions.
         except requests.exceptions.RequestException as e:
-            self.l_error('delete',"Connection error for %s: %s" % (url, e))
+            self.logger.error("Connection error for %s: %s" % (url, e))
             return False
         return(self.response(response,'delete'))
 
-
-
-    def l_info(self, name, string):
-        self.logger.info("%s:%s: %s" %  (self.l_name,name,string))
-
-    def l_error(self, name, string, exc_info=False):
-        self.logger.error("%s:%s: %s" % (self.l_name,name,string), exc_info=exc_info)
-
-    def l_warning(self, name, string):
-        self.logger.warning("%s:%s: %s" % (self.l_name,name,string))
-
-    def l_debug(self, name, debug_level, string):
-        if self.debug_level >= debug_level:
-            self.logger.debug("%s:%s: %s" % (self.l_name,name,string))

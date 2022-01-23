@@ -1,25 +1,40 @@
 
 
-try:
-    from polyinterface import Node,LOGGER
-except ImportError:
-    from pgc_interface import Node,LOGGER
+from udi_interface import Node,LOGGER
     
 from copy import deepcopy
 from const import driversMap,windMap
 from node_funcs import *
 
 class Weather(Node):
-    def __init__(self, controller, primary, address, name, useCelsius, forecast):
-        super().__init__(controller, primary, address, name)
+    def __init__(self, controller, primary, address, name, useCelsius, forecast, weather):
+        super().__init__(controller.poly, primary, address, name)
         self.type = 'forecast' if forecast else 'weather'
         self.forecastNum = 1 if forecast else 0
         self.useCelsius = useCelsius
         self.id = 'EcobeeWeatherC' if self.useCelsius else 'EcobeeWeatherF'
-        self.drivers = self._convertDrivers(driversMap[self.id]) if self.controller._cloud else deepcopy(driversMap[self.id])
+        self.drivers = deepcopy(driversMap[self.id])
+        self.initial_weather = weather
+        controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
+        controller.poly.subscribe(controller.poly.CONFIGDONE,             self.handler_config_done) 
+        controller.poly.subscribe(controller.poly.ADDNODEDONE,            self.handler_add_node_done) 
 
-    def start(self):
+    def handler_start(self):
+        LOGGER.debug('enter')
+
+    def handler_config_done(self):
+        LOGGER.debug('enter')
+        self.update(self.initial_weather)
         self.query()
+        LOGGER.debug('exit')
+
+    def handler_add_node_done(self, data):
+        LOGGER.debug('enter')
+        if not data['address'] == self.address:
+          return
+        self.update(self.initial_weather)
+        self.query()
+        LOGGER.debug('exit')
 
     def update(self, weather):
       try:

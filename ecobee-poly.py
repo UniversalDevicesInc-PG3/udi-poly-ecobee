@@ -1,31 +1,22 @@
-#!/usr/bin/env python3
-
+#!/usr/bin/env python
+# 
+from udi_interface import Interface,LOGGER
 import sys
-CLOUD = False
-try:
-    import polyinterface
-except ImportError:
-    import pgc_interface as polyinterface
-    CLOUD = True
 
+""" Grab My Controller Node """
 from nodes import Controller
 
-import logging
-LOGGER = polyinterface.LOGGER
-# I want this logging
-#logging.Formatter('%(asctime)s %(threadName)-10s %(name)-18s %(levelname)-8s %(module)s:%(funcName)s: %(message)s')
-# Default Format is:         '%(asctime)s %(threadName)-10s %(name)-18s %(levelname)-8s %(module)s:%(funcName)s: %(message)s'
-#                            '%(asctime)s %(threadName)-10s %(module)-13s %(levelname)-8s %(funcName)s: %(message)s [%(module)s:%(funcName)s]'
-#polyinterface.set_log_format('%(asctime)s %(threadName)-10s %(name)-18s %(levelname)-8s %(message)s [%(module)s:%(funcName)s]')
-
 if __name__ == "__main__":
-    if sys.version_info < (3, 5):
-        LOGGER.error("ERROR: Python 3.5 or greater is required not {}.{}".format(sys.version_info[0],sys.version_info[1]))
-        sys.exit(1)
     try:
-        polyglot = polyinterface.Interface('Ecobee')
+        polyglot = Interface([])
         polyglot.start()
-        control = Controller(polyglot)
-        control.runForever()
+        polyglot.updateProfile()
+        polyglot.setCustomParamsDoc()
+        Controller(polyglot, 'controller', 'controller', 'Ecobee Controller')
+        polyglot.runForever()
     except (KeyboardInterrupt, SystemExit):
-        sys.exit(0)
+        LOGGER.warning("Received interrupt or exit...")
+        polyglot.stop()
+    except Exception as err:
+        LOGGER.error('Excption: {0}'.format(err), exc_info=True)
+    sys.exit(0)
