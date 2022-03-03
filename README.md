@@ -71,6 +71,8 @@ When a new release is published, it should be released to the polyglot web store
 
 ## Release Notes
 
+- 3.0.1: 03/02/2022
+  - Fix bug caused by change in PG3 interface sending oauth data to nsdata handler.
 - 3.0.0: Jimbo 01/22/2022
   - Initial PG3 release, not tested from store yet...
 - 2.3.0: JimBo 01/14/2022
