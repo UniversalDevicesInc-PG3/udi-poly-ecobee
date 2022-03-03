@@ -236,6 +236,9 @@ class Controller(Node):
 
     def handler_nsdata(self, key, data):
         LOGGER.debug(f"key={key} data={data}")
+        if key != "nsdata":
+            LOGGER.info(f"Ignoring key={key} data={data}")
+            return
         if data is None:
             LOGGER.warning(f"No NSDATA... Must be running locally key={key} data={data}")
             self.handler_nsdata_st = False
