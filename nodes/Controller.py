@@ -210,7 +210,7 @@ class Controller(Node):
     # sends a stop command for the nodeserver to Polyglot
     def exit(self):
         LOGGER.info('Asking Polyglot to stop me.')
-        self.poly.send({"stop": {}})    # sends a stop command for the nodeserver to Polyglot
+        self.poly.stop()
 
     def delete(self):
         LOGGER.warning("Nodeserver is being deleted...")
@@ -598,6 +598,7 @@ class Controller(Node):
     def handler_stop(self):
         LOGGER.debug('NodeServer stoping...')
         self.set_ecobee_st(False)
+        self.poly.stop()
 
     def thermostatIdToAddress(self,tid):
         return 't{}'.format(tid)
