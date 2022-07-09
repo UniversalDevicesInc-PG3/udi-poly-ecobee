@@ -41,6 +41,7 @@ class Controller(Node):
         self.api_key_param = None
         self.n_queue = []
         self.debug_level = 0
+        self.idSuffix = {}
         #
         self.handler_config_st      = None
         self.handler_config_done_st = None
@@ -648,7 +649,7 @@ class Controller(Node):
                     useCelsius = True if tstat['settings']['useCelsius'] else False
                     self.add_node(Thermostat(self, address, address, thermostatId,
                                             'Ecobee - {}'.format(get_valid_node_name(thermostat['name'])),
-                                            thermostat, fullData, useCelsius))
+                                            thermostat, fullData, useCelsius, self.idSuffix[thermostatId]))
         return True
 
     def check_profile(self,thermostats):
@@ -702,7 +703,7 @@ class Controller(Node):
             self.Data['profile_info'] = self.profile_info
             self.Data['climates'] = climates
 
-    def write_profile(self,climates):
+    def write_profile(self,runtime,climates):
       pfx = '{}:write_profile:'.format(self.address)
       #
       # Start the nls with the template data.
@@ -885,6 +886,15 @@ class Controller(Node):
             LOGGER.debug(f'data={res}')
         if res is False or res is None:
             return False
+        # Is it one with Air Quaility?
+        if 'runtime' in res['data']['thermostatList'][0]:
+            runtime = res['data']['thermostatList'][0]['runtime']
+            if 'actualVOC' in runtime and runtime['actualVOC'] == -5002:
+                LOGGER.debug(f"HasAQ: Got a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
+                self.idSuffix[id] = 'wAQ'
+            else:
+                LOGGER.debug(f"HasAQ: Not a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
+                self.idSuffix[id] = ''
         return res['data']
 
     def ecobeePost(self, thermostatId, postData = {}):

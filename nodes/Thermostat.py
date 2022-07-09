@@ -15,10 +15,11 @@ from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driver
  Current Weather: n<profile>_w<thermostatId> e.g. n003_w511892759243
  Forecast Weather: n<profile>_f<thermostatId> e.g. n003_f511892759243
  Sensors: n<profile>_s<sensor code> e.g. n003_rs_r6dr
-"""
+""" 
 
 class Thermostat(Node):
-    def __init__(self, controller, primary, address, thermostatId, name, revData, fullData, useCelsius):
+    def __init__(self, controller, primary, address, thermostatId, name, revData, fullData, useCelsius, idSuffix):
+        LOGGER.debug(f"Adding: name={name} address={address} idSuffix={idSuffix}")
         #LOGGER.debug("fullData={}".format(json.dumps(fullData, sort_keys=True, indent=2)))
         self.controller = controller
         self.name = name
@@ -28,7 +29,8 @@ class Thermostat(Node):
         self.settings = self.tstat['settings']
         self.useCelsius = useCelsius
         self.type = 'thermostat'
-        self.id = 'EcobeeC' if self.useCelsius else 'EcobeeF'
+        self.id = f'Ecobee{idSuffix}C' if self.useCelsius else f'Ecobee{idSuffix}F'
+        LOGGER.debug(f'id={self.id}')
         self.drivers = deepcopy(driversMap[self.id])
         self.id = '{}_{}'.format(self.id,thermostatId)
         self.revData = revData
