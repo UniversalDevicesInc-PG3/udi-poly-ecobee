@@ -9,6 +9,16 @@
     <range uom="25" subset="0,1,2" nls="CST"/>
   </editor>
 
+  <editor id="calb">
+    <range uom="25" subset="0-3" nls="CALB"/>
+  </editor>
+  <editor id="I_AQ_SCORE">
+    <range uom="25" min="0" max="5000"/>
+  </editor>
+  <editor id="I_INTEGER">
+    <range uom="56" min="0" max="4294967295" prec="0" />
+  </editor>
+
   <!-- io_guy Ecobee models -->
   <!-- Temperature -->
   <editor id="I_TEMP_C">

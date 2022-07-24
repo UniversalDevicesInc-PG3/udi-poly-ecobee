@@ -158,6 +158,12 @@ class Thermostat(Node):
       equipmentStatus = self.tstat['equipmentStatus'].split(',')
       #LOGGER.debug("settings={}".format(json.dumps(self.settings, sort_keys=True, indent=2)))
       self.runtime = self.tstat['runtime']
+      if 'energy' in self.tstat:
+        self.energy = self.tstat['energy']
+        LOGGER.debug(' energy={}'.format(json.dumps(self.energy, sort_keys=True, indent=2)))
+      else:
+        self.energy = None
+        LOGGER.debug(' energy=None')
       LOGGER.debug(' runtime={}'.format(json.dumps(self.runtime, sort_keys=True, indent=2)))
       clihcs = 0
       for status in equipmentStatus:
@@ -248,6 +254,16 @@ class Thermostat(Node):
         'GV10': self.settings['backlightOnIntensity'],
         'GV11': self.settings['backlightSleepIntensity']
       }
+      if 'actualVOC' in self.runtime and int(self.runtime['actualVOC']) != -50022:
+        updates['VOCLVL'] = self.runtime['actualVOC']
+        updates['CO2LVL'] = self.runtime['actualCO2']
+        updates['GV12'] = self.runtime['actualAQAccuracy']
+        updates['GV13'] = self.runtime['actualAQScore']
+
+      # Now the mobile also displays a "Excellent, Good, or Poor", there's a comma delimited string in the energy object 
+      # (requires includeEnergy: true in the thermostat fetch) airQualityPreferences that looks like:
+      # "airQualityPreferences": "aqGood:101,aqPoor:201,vocGood:1601,vocPoor:7001,co2Good:753,co2Poor:1753"
+
       for key, value in updates.items():
           LOGGER.debug('setDriver({},{})'.format(key,value))
           self.setDriver(key, value)

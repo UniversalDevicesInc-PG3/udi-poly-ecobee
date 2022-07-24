@@ -164,6 +164,10 @@
       <st id="GV7" editor="I_ENABLED" />
       <st id="GV8" editor="BOOL" />
       <st id="GV9" editor="I_ENABLED" />
+      <st id="VOCLVL" editor="I_INTEGER" />
+      <st id="CO2LVL" editor="I_INTEGER" />
+      <st id="GV12" editor="calb" />
+      <st id="GV13" editor="I_AQ_SCORE" />
     </sts>
     <cmds>
       <accepts>
@@ -235,6 +239,10 @@
       <st id="GV7" editor="I_ENABLED" />
       <st id="GV8" editor="BOOL" />
       <st id="GV9" editor="I_ENABLED" />
+      <st id="VOCLVL" editor="I_INTEGER" />
+      <st id="CO2LVL" editor="I_INTEGER" />
+      <st id="GV12" editor="calb" />
+      <st id="GV13" editor="I_AQ_SCORE" />
     </sts>
     <cmds>
       <accepts>

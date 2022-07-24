@@ -617,7 +617,7 @@ class Controller(Node):
         try:
             self.discover_st = self._discover()
         except Exception as e:
-            LOGGER.error('failed: {}'.format(e),True)
+            LOGGER.error('failed: {}'.format(e), exc_info=True)
             self.discover_st = False
         self.in_discover = False
         return self.discover_st
@@ -703,7 +703,7 @@ class Controller(Node):
             self.Data['profile_info'] = self.profile_info
             self.Data['climates'] = climates
 
-    def write_profile(self,runtime,climates):
+    def write_profile(self,climates):
       pfx = '{}:write_profile:'.format(self.address)
       #
       # Start the nls with the template data.
@@ -749,6 +749,10 @@ class Controller(Node):
         nls.write('ND-EcobeeC_{0}-ICON = Thermostat\n'.format(id))
         nls.write('ND-EcobeeF_{0}-NAME = Ecobee Thermostat {0} (F)\n'.format(id))
         nls.write('ND-EcobeeF_{0}-ICON = Thermostat\n'.format(id))
+        nls.write('ND-EcobeewAQC_{0}-NAME = Ecobee AQ Thermostat {0} (C)\n'.format(id))
+        nls.write('ND-EcobeewAQC_{0}-ICON = Thermostat\n'.format(id))
+        nls.write('ND-EcobeewAQF_{0}-NAME = Ecobee AQ Thermostat {0} (F)\n'.format(id))
+        nls.write('ND-EcobeewAQF_{0}-ICON = Thermostat\n'.format(id))
         # ucfirst them all
         customList = list()
         for i in range(len(climateList)):
@@ -840,7 +844,7 @@ class Controller(Node):
         return thermostats
 
     def getThermostatFull(self, id):
-        return self.getThermostatSelection(id,True,True,True,True,True,True,True,True,True,True,True,True)
+        return self.getThermostatSelection(id,True,True,True,True,True,True,True,True,True,True,True,True,True)
 
     def getThermostatSelection(self,id,
                                includeEvents=False,
@@ -854,7 +858,8 @@ class Controller(Node):
                                includeUtility=False,
                                includeAlerts=False,
                                includeWeather=False,
-                               includeSensors=False
+                               includeSensors=False,
+                               includeEnergy=False
                                ):
         if not self._checkTokens():
             LOGGER.error('getThermostat failed. Couldn\'t get tokens.')
@@ -876,7 +881,8 @@ class Controller(Node):
                                        'includeUtility': includeUtility,
                                        'includeAlerts': includeAlerts,
                                        'includeWeather': includeWeather,
-                                       'includeSensors': includeSensors
+                                       'includeSensors': includeSensors,
+                                       'includeEnergy': includeEnergy
                                        }
                                }
                            )
@@ -889,12 +895,12 @@ class Controller(Node):
         # Is it one with Air Quaility?
         if 'runtime' in res['data']['thermostatList'][0]:
             runtime = res['data']['thermostatList'][0]['runtime']
-            if 'actualVOC' in runtime and runtime['actualVOC'] == -5002:
-                LOGGER.debug(f"HasAQ: Got a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
-                self.idSuffix[id] = 'wAQ'
-            else:
+            if 'actualVOC' in runtime and int(runtime['actualVOC']) == -50022:
                 LOGGER.debug(f"HasAQ: Not a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
                 self.idSuffix[id] = ''
+            else:
+                LOGGER.debug(f"HasAQ: Got a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
+                self.idSuffix[id] = 'wAQ'
         return res['data']
 
     def ecobeePost(self, thermostatId, postData = {}):

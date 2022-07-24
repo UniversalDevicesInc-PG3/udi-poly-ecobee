@@ -70,7 +70,8 @@ When a new release is published, it should be released to the polyglot web store
 
 
 ## Release Notes
-
+- 3.1.0: 07/23/2022
+  - Beta release of supporting New thermostats with Air Quality
 - 3.0.2: 03/08/2022
   - Call interface stop when stopping
 - 3.0.1: 03/02/2022

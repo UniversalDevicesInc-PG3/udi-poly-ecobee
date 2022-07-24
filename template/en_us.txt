@@ -16,6 +16,12 @@ CST-0 = Disconnected
 CST-1 = Connected
 CST-2 = Failed
 
+# Calibration Status
+CALB-0 = None
+CALB-1 = Some
+CALB-2 = More
+CALB-3 = Fully
+
 ND-EcobeeC-NAME = Ecobee Thermostat (C)
 ND-EcobeeC-ICON = Thermostat
 ND-EcobeeF-NAME = Ecobee Thermostat (F)
@@ -44,6 +50,10 @@ ST-140E-GV8-NAME = Connected
 ST-140E-GV9-NAME = Weather
 ST-140E-GV10-NAME = Backlight On Intensity
 ST-140E-GV11-NAME = Backlight Sleep Intensity
+ST-140E-VOCLVL-NAME = Actual VOC
+ST-140E-CO2LVL-NAME = Actual CO2
+ST-140E-GV12-NAME = Air Quality Accuracy
+ST-140E-GV13-NAME = Air Quality Score
 CMD-140E-GV1-NAME = Humidification Setpoint
 CMD-140E-GV3-NAME = Climate Type
 CMD-140E-GV4-NAME = Fan On Time
