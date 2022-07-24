@@ -70,6 +70,8 @@ When a new release is published, it should be released to the polyglot web store
 
 
 ## Release Notes
+- 3.1.2: 07/24/2022
+  - Fix bug caused by changes in previous release.
 - 3.1.1: 07/24/2022
   - Release: [Feature Request: ecobee Premium air quality sensor](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues/4)
 - 3.1.0: 07/23/2022
