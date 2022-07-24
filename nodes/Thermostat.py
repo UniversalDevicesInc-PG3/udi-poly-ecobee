@@ -254,7 +254,7 @@ class Thermostat(Node):
         'GV10': self.settings['backlightOnIntensity'],
         'GV11': self.settings['backlightSleepIntensity']
       }
-      if 'actualVOC' in self.runtime and int(self.runtime['actualVOC']) != -50022:
+      if 'actualVOC' in self.runtime and int(self.runtime['actualVOC']) != -5002:
         updates['VOCLVL'] = self.runtime['actualVOC']
         updates['CO2LVL'] = self.runtime['actualCO2']
         updates['GV12'] = self.runtime['actualAQAccuracy']

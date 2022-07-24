@@ -895,7 +895,7 @@ class Controller(Node):
         # Is it one with Air Quaility?
         if 'runtime' in res['data']['thermostatList'][0]:
             runtime = res['data']['thermostatList'][0]['runtime']
-            if 'actualVOC' in runtime and int(runtime['actualVOC']) == -50022:
+            if 'actualVOC' in runtime and int(runtime['actualVOC']) == -5002:
                 LOGGER.debug(f"HasAQ: Not a new thermostat with Air Quality {id} actualVOC={runtime['actualVOC']}")
                 self.idSuffix[id] = ''
             else:
