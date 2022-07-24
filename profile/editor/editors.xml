@@ -10,10 +10,13 @@
   </editor>
 
   <editor id="calb">
-    <range uom="25" subset="0-3" nls="CALB"/>
+    <range uom="25" subset="0-4" nls="CALB"/>
+  </editor>
+  <editor id="I_RATING">
+    <range uom="25" subset="0-4" nls="RT"/>
   </editor>
   <editor id="I_AQ_SCORE">
-    <range uom="25" min="0" max="5000"/>
+    <range uom="56" min="0" max="5000"/>
   </editor>
   <editor id="I_INTEGER">
     <range uom="56" min="0" max="4294967295" prec="0" />

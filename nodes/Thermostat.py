@@ -161,6 +161,12 @@ class Thermostat(Node):
       if 'energy' in self.tstat:
         self.energy = self.tstat['energy']
         LOGGER.debug(' energy={}'.format(json.dumps(self.energy, sort_keys=True, indent=2)))
+        # "airQualityPreferences": "aqGood:101,aqPoor:201,vocGood:1601,vocPoor:7001,co2Good:753,co2Poor:1753",
+        if 'airQualityPreferences' in self.energy:
+          self.aqp = dict()
+          for aqp in self.energy['airQualityPreferences'].split(','):
+            aq = aqp.split(':')
+            self.aqp[aq[0]] = int(aq[1])
       else:
         self.energy = None
         LOGGER.debug(' energy=None')
@@ -259,6 +265,26 @@ class Thermostat(Node):
         updates['CO2LVL'] = self.runtime['actualCO2']
         updates['GV12'] = self.runtime['actualAQAccuracy']
         updates['GV13'] = self.runtime['actualAQScore']
+      if self.energy is not None:
+        # "airQualityPreferences": "aqGood:101,aqPoor:201,vocGood:1601,vocPoor:7001,co2Good:753,co2Poor:1753",
+        if self.runtime['actualAQScore'] < self.aqp['aqGood']:
+          updates['GV14'] = 1
+        elif self.runtime['actualAQScore'] < self.aqp['aqPoor']:
+          updates['GV14'] = 2
+        else:
+          updates['GV14'] = 3
+        if self.runtime['actualVOC'] < self.aqp['vocGood']:
+          updates['GV15'] = 1
+        elif self.runtime['actualVOC'] < self.aqp['vocPoor']:
+          updates['GV15'] = 2
+        else:
+          updates['GV15'] = 3
+        if self.runtime['actualCO2'] < self.aqp['co2Good']:
+          updates['GV16'] = 1
+        elif self.runtime['actualCO2'] < self.aqp['co2Poor']:
+          updates['GV16'] = 2
+        else:
+          updates['GV16'] = 3
 
       # Now the mobile also displays a "Excellent, Good, or Poor", there's a comma delimited string in the energy object 
       # (requires includeEnergy: true in the thermostat fetch) airQualityPreferences that looks like:

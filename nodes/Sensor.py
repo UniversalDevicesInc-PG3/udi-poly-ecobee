@@ -27,14 +27,20 @@ class Sensor(Node):
       }
       # Cross reference from sensor capabilty to driver
       xref = {
-          'temperature': 'ST',
-          'humidity': 'CLIHUM',
-          'occupancy': 'GV1',
-          'responding': 'GV2',
-          'dryContact': 'GV3'
+        'temperature': 'ST',
+        'humidity': 'CLIHUM',
+        'occupancy': 'GV1',
+        'responding': 'GV2',
+        'dryContact': 'GV3',
+        'airQualityAccuracy': False,
+        'airQuality': False,
+        'vocPPM': False,
+        'co2PPM': False,
+        'airPressure': False
       }
       for item in sensor['capability']:
           if item['type'] in xref:
+            if xref[item['type']] is not False:
               val = item['value']
               if val == "true":
                 val = 1

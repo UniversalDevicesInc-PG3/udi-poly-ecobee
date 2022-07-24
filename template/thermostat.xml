@@ -168,6 +168,9 @@
       <st id="CO2LVL" editor="I_INTEGER" />
       <st id="GV12" editor="calb" />
       <st id="GV13" editor="I_AQ_SCORE" />
+      <st id="GV14" editor="I_RATING" />
+      <st id="GV15" editor="I_RATING" />
+      <st id="GV16" editor="I_RATING" />
     </sts>
     <cmds>
       <accepts>
@@ -243,6 +246,9 @@
       <st id="CO2LVL" editor="I_INTEGER" />
       <st id="GV12" editor="calb" />
       <st id="GV13" editor="I_AQ_SCORE" />
+      <st id="GV14" editor="I_RATING" />
+      <st id="GV15" editor="I_RATING" />
+      <st id="GV16" editor="I_RATING" />
     </sts>
     <cmds>
       <accepts>

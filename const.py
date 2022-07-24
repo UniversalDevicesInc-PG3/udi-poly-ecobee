@@ -117,7 +117,10 @@ driversMap = {
     { 'driver': 'VOCLVL', 'value': 0, 'uom': '56' },
     { 'driver': 'CO2LVL', 'value': 0, 'uom': '56' },
     { 'driver': 'GV12', 'value': 0, 'uom': '25' },
-    { 'driver': 'GV13', 'value': 0, 'uom': '56' }
+    { 'driver': 'GV13', 'value': 0, 'uom': '56' },
+    { 'driver': 'GV14', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV15', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV16', 'value': 0, 'uom': '25' },
   ],
   'EcobeewAQC': [
     { 'driver': 'ST', 'value': 0, 'uom': '4' },
@@ -142,7 +145,10 @@ driversMap = {
     { 'driver': 'VOCLVL', 'value': 0, 'uom': '56' },
     { 'driver': 'CO2LVL', 'value': 0, 'uom': '56' },
     { 'driver': 'GV12', 'value': 0, 'uom': '25' },
-    { 'driver': 'GV13', 'value': 0, 'uom': '56' }
+    { 'driver': 'GV13', 'value': 0, 'uom': '56' },
+    { 'driver': 'GV14', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV15', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV16', 'value': 0, 'uom': '25' },
   ],
   'EcobeeSensorF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17' },

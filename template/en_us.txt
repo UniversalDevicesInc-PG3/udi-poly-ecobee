@@ -20,7 +20,14 @@ CST-2 = Failed
 CALB-0 = None
 CALB-1 = Some
 CALB-2 = More
+CALB-3 = Most
 CALB-3 = Fully
+
+# AQ RATING
+RT-0 = Unknown
+RT-1 = Excellent
+RT-2 = Good
+RT-3 = Poor
 
 ND-EcobeeC-NAME = Ecobee Thermostat (C)
 ND-EcobeeC-ICON = Thermostat
@@ -53,7 +60,10 @@ ST-140E-GV11-NAME = Backlight Sleep Intensity
 ST-140E-VOCLVL-NAME = Actual VOC
 ST-140E-CO2LVL-NAME = Actual CO2
 ST-140E-GV12-NAME = Air Quality Accuracy
-ST-140E-GV13-NAME = Air Quality Score
+ST-140E-GV13-NAME = Actual Air Quality Score
+ST-140E-GV14-NAME = Air Quality Score
+ST-140E-GV15-NAME = VOC Score
+ST-140E-GV16-NAME = CO2 Score
 CMD-140E-GV1-NAME = Humidification Setpoint
 CMD-140E-GV3-NAME = Climate Type
 CMD-140E-GV4-NAME = Fan On Time
