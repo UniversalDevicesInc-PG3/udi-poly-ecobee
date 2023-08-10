@@ -34,11 +34,11 @@
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_tstatid" init="GV3" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="CLIFS">
           <p id="" editor="I_TSTAT_FAN_MODE" init="CLIFS" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="GV4">
           <p id="" editor="I_TSTAT_FANONTIME" init="GV4" />
@@ -108,11 +108,11 @@
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_tstatid" init="GV3" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="CLIFS">
           <p id="" editor="I_TSTAT_FAN_MODE" init="CLIFS" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="GV4">
           <p id="" editor="I_TSTAT_FANONTIME" init="GV4" />
@@ -188,11 +188,11 @@
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_tstatid" init="GV3" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="CLIFS">
           <p id="" editor="I_TSTAT_FAN_MODE" init="CLIFS" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="GV4">
           <p id="" editor="I_TSTAT_FANONTIME" init="GV4" />
@@ -269,11 +269,11 @@
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_tstatid" init="GV3" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="CLIFS">
           <p id="" editor="I_TSTAT_FAN_MODE" init="CLIFS" />
-          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" init="0" optional="T" />
+          <p id="HoldType" editor="I_TSTAT_ECO_SCHED_OPT" optional="T" />
         </cmd>
         <cmd id="GV4">
           <p id="" editor="I_TSTAT_FANONTIME" init="GV4" />
