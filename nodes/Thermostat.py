@@ -262,7 +262,7 @@ class Thermostat(Node):
         'GV8': 1 if self.runtime['connected'] else 0,
         'GV10': self.settings['backlightOnIntensity'],
         'GV11': self.settings['backlightSleepIntensity'],
-        'GV17': self.getECOIndex,
+        'GV17': self.getECOIndex(),
       }
       if 'actualVOC' in self.runtime and int(self.runtime['actualVOC']) != -5002:
         updates['VOCLVL'] = self.runtime['actualVOC']
@@ -322,7 +322,11 @@ class Thermostat(Node):
       return climateIndex
 
     def getECOIndex(self):
-       idx = 0 if (self.energy['energyFeatureState'] == "disabled") else 1
+       if self.energy['energyFeatureState'] in ecoMap:
+          idx = ecoMap[self.energy['energyFeatureState']]
+       else:
+          LOGGER.error("Unknown energyFeatureStage {}".format(self.energy['energyFeatureState']))
+          idx = 0
        LOGGER.debug("ECO energyFeatureState={} idx={}".format(self.energy['energyFeatureState'],idx))
        return idx
     
@@ -763,14 +767,24 @@ class Thermostat(Node):
         self.setDriver(cmd['cmd'], cmd['value'])
 
     def cmdSetECO(self, cmd):
+      LOGGER.debug("cmdSetECO: cmd={} value={}".format(cmd['cmd'],cmd['value']))
       if int(self.getDriver(cmd['cmd'])) == int(cmd['value']):
         LOGGER.debug(f"cmdSetECO: {cmd['cmd']} already set to {cmd['value']}")
         return 
 
+      res = None
+      for val in ecoMap:
+         if ecoMap[val] == int(cmd['value']):
+            res = val
+      if res is None:
+         LOGGER.error('Unknown ECO val {}'.format(cmd['value']))
+         return
+      LOGGER.debug('Setting to {}'.format(res))
+
       command = {
         'thermostat': {
           'energy': {
-            'energyFeatureState': "disabled" if cmd['value'] == 0 else "enable"
+            'energyFeatureState': res
           }
         }
       }

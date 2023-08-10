@@ -52,9 +52,9 @@ fanMap = {
 }
 
 ecoMap = {
-    'disabled indefinitly': 0,
-    'disabled': 0,
-    'enable': 1,
+  'unknown': -1,
+  'disabled': 0,
+  'enabled': 1,
 }
 
 driversMap = {
@@ -77,7 +77,8 @@ driversMap = {
     { 'driver': 'GV8', 'value': 0, 'uom': '2' },
     { 'driver': 'GV9', 'value': 1, 'uom': '25' },
     { 'driver': 'GV10', 'value': 10, 'uom': '56' },
-    { 'driver': 'GV11', 'value': 10, 'uom': '56' }
+    { 'driver': 'GV11', 'value': 10, 'uom': '56' },
+    { 'driver': 'GV17', 'value': 0, 'uom': '25' }
   ],
   'EcobeeC': [
     { 'driver': 'ST', 'value': 0, 'uom': '4' },
@@ -98,7 +99,8 @@ driversMap = {
     { 'driver': 'GV8', 'value': 0, 'uom': '2' },
     { 'driver': 'GV9', 'value': 1, 'uom': '25' },
     { 'driver': 'GV10', 'value': 10, 'uom': '56' },
-    { 'driver': 'GV11', 'value': 10, 'uom': '56' }
+    { 'driver': 'GV11', 'value': 10, 'uom': '56' },
+    { 'driver': 'GV17', 'value': 0, 'uom': '25' }
   ],
   'EcobeewAQF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17' },
@@ -127,6 +129,7 @@ driversMap = {
     { 'driver': 'GV14', 'value': 0, 'uom': '25' },
     { 'driver': 'GV15', 'value': 0, 'uom': '25' },
     { 'driver': 'GV16', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV17', 'value': 0, 'uom': '25' }
   ],
   'EcobeewAQC': [
     { 'driver': 'ST', 'value': 0, 'uom': '4' },
@@ -155,6 +158,7 @@ driversMap = {
     { 'driver': 'GV14', 'value': 0, 'uom': '25' },
     { 'driver': 'GV15', 'value': 0, 'uom': '25' },
     { 'driver': 'GV16', 'value': 0, 'uom': '25' },
+    { 'driver': 'GV17', 'value': 0, 'uom': '25' }
   ],
   'EcobeeSensorF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17' },

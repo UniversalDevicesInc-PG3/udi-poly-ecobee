@@ -21,6 +21,9 @@
   <editor id="I_INTEGER">
     <range uom="56" min="0" max="4294967295" prec="0" />
   </editor>
+  <editor id="I_ECO">
+    <range uom="25" subset="0-1" nls="ECO"/>
+  </editor>
 
   <!-- io_guy Ecobee models -->
   <!-- Temperature -->
