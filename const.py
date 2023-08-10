@@ -51,6 +51,12 @@ fanMap = {
   'on': 1,
 }
 
+ecoMap = {
+    'disabled indefinitly': 0,
+    'disabled': 0,
+    'enable': 1,
+}
+
 driversMap = {
   'EcobeeF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17' },

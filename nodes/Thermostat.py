@@ -5,7 +5,7 @@ from copy import deepcopy
 import json
 from node_funcs import *
 from nodes import Sensor, Weather
-from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driversMap
+from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driversMap,ecoMap
 
 
 """
@@ -169,6 +169,7 @@ class Thermostat(Node):
             aq = aqp.split(':')
             if len(aq) > 0:
               self.aqp[aq[0]] = int(aq[1])
+        self.setECO(self.energy['energyFeatureState'])
       else:
         self.energy = None
         LOGGER.debug(' energy=None')
@@ -260,7 +261,8 @@ class Thermostat(Node):
         'GV7': 1 if self.settings['followMeComfort'] else 0,
         'GV8': 1 if self.runtime['connected'] else 0,
         'GV10': self.settings['backlightOnIntensity'],
-        'GV11': self.settings['backlightSleepIntensity']
+        'GV11': self.settings['backlightSleepIntensity'],
+        'GV17': self.getECOIndex,
       }
       if 'actualVOC' in self.runtime and int(self.runtime['actualVOC']) != -5002:
         updates['VOCLVL'] = self.runtime['actualVOC']
@@ -319,6 +321,11 @@ class Thermostat(Node):
         climateIndex = climateMap['unknown']
       return climateIndex
 
+    def getECOIndex(self):
+       idx = 0 if (self.energy['energyFeatureState'] == "disabled") else 1
+       LOGGER.debug("ECO energyFeatureState={} idx={}".format(self.energy['energyFeatureState'],idx))
+       return idx
+    
     def getCurrentClimateDict(self):
         return self.getClimateDict(self.program['currentClimateRef'])
 
@@ -561,6 +568,18 @@ class Thermostat(Node):
       LOGGER.debug('{}:setFanState: {}={}'.format(self.address,val,dval))
       self.setDriver('CLIFRS',dval)
 
+    def setECO(self,val):
+      if is_int(val):
+          dval = val
+      else:
+          if val in ecoMap:
+            dval = ecoMap[val]
+          else:
+            LOGGER.error("{}:ECO: Unknown ecoMap name {}".format(self.address,val))
+            return False
+      LOGGER.debug('{}:setECO: {}={}'.format(self.address,val,dval))
+      self.setDriver('GV17',dval)
+
     def cmdSetPF(self, cmd):
       # Set a hold:  https://www.ecobee.com/home/developer/api/examples/ex5.shtml
       # TODO: Need to check that mode is auto,
@@ -743,6 +762,22 @@ class Thermostat(Node):
       if self.ecobeePost(command):
         self.setDriver(cmd['cmd'], cmd['value'])
 
+    def cmdSetECO(self, cmd):
+      if int(self.getDriver(cmd['cmd'])) == int(cmd['value']):
+        LOGGER.debug(f"cmdSetECO: {cmd['cmd']} already set to {cmd['value']}")
+        return 
+
+      command = {
+        'thermostat': {
+          'energy': {
+            'energyFeatureState': "disabled" if cmd['value'] == 0 else "enable"
+          }
+        }
+      }
+      
+      if self.ecobeePost(command):
+        self.setDriver(cmd['cmd'], cmd['value'])
+  
     hint = '0x010c0100'
     commands = { 'QUERY': query,
                 'CLISPH': cmdSetPF,
@@ -761,4 +796,5 @@ class Thermostat(Node):
                 'GV9': cmdSetDoWeather,
                 'GV10': cmdSetBacklight,
                 'GV11': cmdSetBacklightSleep,
+                'GV17': cmdSetECO
                  }

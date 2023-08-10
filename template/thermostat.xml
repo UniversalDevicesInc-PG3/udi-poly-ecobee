@@ -17,6 +17,7 @@
       <st id="GV7" editor="I_ENABLED" />
       <st id="GV8" editor="BOOL" />
       <st id="GV9" editor="I_ENABLED" />
+      <st id="GV17" editor="I_ENABLED" />
     </sts>
     <cmds>
       <accepts>
@@ -64,6 +65,9 @@
         <cmd id="GV11">
           <p id="" editor="I_BACKLIGHT" init="GV11" />
         </cmd>
+        <cmd id="GV17">
+          <p id="" editor="I_ENABLED" init="GV17" />
+        </cmd>
         <cmd id="QUERY" />
      </accepts>
       </cmds>
@@ -88,6 +92,7 @@
       <st id="GV7" editor="I_ENABLED" />
       <st id="GV8" editor="BOOL" />
       <st id="GV9" editor="I_ENABLED" />
+      <st id="GV17" editor="I_ENABLED" />
     </sts>
     <cmds>
       <accepts>
@@ -141,6 +146,9 @@
         <cmd id="GV11">
           <p id="" editor="I_BACKLIGHT" init="GV11" />
         </cmd>
+        <cmd id="GV17">
+          <p id="" editor="I_ENABLED" init="GV17" />
+        </cmd>
         <cmd id="QUERY" />
       </accepts>
     </cmds>
@@ -171,6 +179,7 @@
       <st id="GV14" editor="I_RATING" />
       <st id="GV15" editor="I_RATING" />
       <st id="GV16" editor="I_RATING" />
+      <st id="GV17" editor="I_ENABLED" />
     </sts>
     <cmds>
       <accepts>
@@ -217,6 +226,9 @@
         </cmd>
         <cmd id="GV11">
           <p id="" editor="I_BACKLIGHT" init="GV11" />
+        </cmd>
+        <cmd id="GV17">
+          <p id="" editor="I_ENABLED" init="GV17" />
         </cmd>
         <cmd id="QUERY" />
      </accepts>
@@ -249,6 +261,7 @@
       <st id="GV14" editor="I_RATING" />
       <st id="GV15" editor="I_RATING" />
       <st id="GV16" editor="I_RATING" />
+      <st id="GV17" editor="I_ENABLED" />
     </sts>
     <cmds>
       <accepts>
@@ -301,6 +314,9 @@
         </cmd>
         <cmd id="GV11">
           <p id="" editor="I_BACKLIGHT" init="GV11" />
+        </cmd>
+        <cmd id="GV17">
+          <p id="" editor="I_ENABLED" init="GV17" />
         </cmd>
         <cmd id="QUERY" />
       </accepts>
