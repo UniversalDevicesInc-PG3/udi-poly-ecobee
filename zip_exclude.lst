@@ -9,3 +9,8 @@ pyharmony/*
 profile/*/custom*
 profile/nls/en_us.txt
 */.gitignore
+*.log
+*.pid
+*.key
+*.cert
+pics/*

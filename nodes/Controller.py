@@ -94,7 +94,6 @@ class Controller(Node):
 
     def handler_start(self):
         self.Notices.clear()
-        #serverdata = self.poly.get_server_data(check_profile=False)
         LOGGER.info(f"Started Ecobee NodeServer {self.poly.serverdata['version']}")
         self.heartbeat()
         #
@@ -980,7 +979,7 @@ class Controller(Node):
         'POLL': cmd_poll,
     }
     drivers = [
-        {'driver': 'ST', 'value': 1, 'uom': 25},
-        {'driver': 'GV1', 'value': 0, 'uom': 2},
-        {'driver': 'GV3', 'value': 0, 'uom': 2}
+        {'driver': 'ST', 'value': 1, 'uom': 25, 'name': 'NodeServer Online'},
+        {'driver': 'GV1', 'value': 0, 'uom': 2, 'name': 'Ecobee Connection Status'},
+        {'driver': 'GV3', 'value': 0, 'uom': 2, 'name': 'Authorized'}
     ]
