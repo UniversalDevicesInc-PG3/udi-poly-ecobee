@@ -70,6 +70,8 @@ When a new release is published, it should be released to the polyglot web store
 
 
 ## Release Notes
+- 3.1.4: 08/15/2023
+  - Properly set version
 - 3.1.3: 08/12/2023
   - Add ability to see and control ECO+
   - Add node names so they show up in PG3 UI

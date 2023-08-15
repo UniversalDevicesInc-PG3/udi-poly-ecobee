@@ -4,12 +4,12 @@ from udi_interface import Interface,LOGGER
 import sys
 
 """ Grab My Controller Node """
-from nodes import Controller
+from nodes import VERSION,Controller
 
 if __name__ == "__main__":
     try:
-        polyglot = Interface([])
-        polyglot.start()
+        polyglot = Interface([Controller])
+        polyglot.start(VERSION)
         polyglot.updateProfile()
         polyglot.setCustomParamsDoc()
         Controller(polyglot, 'controller', 'controller', 'Ecobee Controller')
