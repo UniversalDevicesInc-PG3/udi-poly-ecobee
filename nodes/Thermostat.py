@@ -376,7 +376,8 @@ class Thermostat(Node):
       return getMapName(transitionMap,2) if int(val) == 2 else getMapName(transitionMap,1)
 
     def ecobeePost(self,command):
-        return self.controller.ecobeePost(self.thermostatId, command)
+      LOGGER.debug('{}:ecobeePost: {}'.format(self.address,command))
+      return self.controller.ecobeePost(self.thermostatId, command)
 
     def pushResume(self):
       LOGGER.debug('{}:setResume: Cancelling hold'.format(self.address))
@@ -615,22 +616,24 @@ class Thermostat(Node):
         if self.ecobeePost( {'thermostat': {'settings': {'hvacMode': name}}}):
           self.setDriver(cmd['cmd'], cmd['value'])
 
+    # cmd={'address': 't<address>', 'cmd': 'GV3', 'value': '10', 'uom': '25', 'query': {'HoldType.uom25': '2'}}
     def cmdSetClimateType(self, cmd):
-      LOGGER.debug('{}:cmdSetClimateType: {}={}'.format(self.address,cmd['cmd'],cmd['value']))
+      LOGGER.debug('{}:cmdSetClimateType: {}={} query={}'.format(self.address,cmd['cmd'],cmd['value'],cmd['query']))
       # We don't check if this is already current since they may just want setpoints returned.
       climateName = getMapName(climateMap,int(cmd['value']))
+      query = cmd['query']
       command = {
         'functions': [{
           'type': 'setHold',
           'params': {
-            'holdType': self.getHoldType(),
+            'holdType': self.getHoldType(query['HoldType.uom25']),
             'holdClimateRef': climateName
           }
         }]
       }
       if self.ecobeePost(command):
         self.setDriver(cmd['cmd'], cmd['value'])
-        self.setDriver('CLISMD',transitionMap[self.getHoldType()])
+        self.setDriver('CLISMD',query['HoldType.uom25'])
         # If we went back to current climate name that will reset temps, so reset isy
         #if self.program['currentClimateRef'] == climateName:
         self.setClimateSettings(climateName)
