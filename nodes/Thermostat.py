@@ -82,9 +82,9 @@ class Thermostat(Node):
                 dval = int(dval)
                 # Set False if 0, otherwise True since initially it may be None?
                 self.do_weather = False if dval == 0 else True
-            except:
-                LOGGER.error('check_weather: Failed to getDriver GV9, asuming do_weather=True')
-                self.do_weather = True
+            except Exception:
+                LOGGER.error('check_weather: Failed to getDriver GV9, assuming do_weather=False')
+                self.do_weather = False
         if self.do_weather:
             # we want some weather
             if self.weather is None:
@@ -102,9 +102,9 @@ class Thermostat(Node):
         else:
             # we dont want weather
             if self.weather is not None:
-                # we have the nodes, delete them
                 self.controller.poly.delNode(self.weather.address)
                 self.weather = None
+            if self.forcast is not None:
                 self.controller.poly.delNode(self.forcast.address)
                 self.forcast = None
 
@@ -689,6 +689,12 @@ class Thermostat(Node):
         self.setDriver(cmd['cmd'], value)
         self.do_weather = True if value == 1 else False
         self.check_weather()
+        if value == 1:
+          # Fetch includeWeather immediately; longPoll may not run until
+          # the next revision change otherwise.
+          wx = self.controller.getThermostatRuntime(self.thermostatId, include_weather=True)
+          if wx is not False:
+            self.update(self.revData, wx)
 
     def cmdSetBacklight(self,cmd):
       self.pushBacklight(cmd['value'])

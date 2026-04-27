@@ -182,11 +182,14 @@ once per Ecobee-supplied interval, with automatic backoff on `slow_down`.
 
 ### F. Trim routine refresh selection (`Controller.py`)
 
-- Added `getThermostatRuntime(id)` which requests only:
+- Added `getThermostatRuntime(id, include_weather=...)` which requests only:
   `events, program, settings, runtime, equipmentStatus, sensors,
-  energy, weather`.
-- `updateThermostats()` now uses this instead of `getThermostatFull()`
-  (which still exists for the initial discover / new-node-add path).
+  energy`, and **optionally** `weather` when the thermostat's Weather
+  driver (GV9) is enabled (see **M**).
+- `updateThermostats()` uses this instead of the all-flags
+  `getThermostatFull()` path for routine refreshes; new thermostats on
+  discover use the same lean selection with `include_weather=False` by
+  default.
 - The dropped fields (`extendedRuntime`, `location`, `utility`,
   `version`, `alerts`) are not consumed by our refresh code, so this is
   a safe payload reduction with no behavioral change.
@@ -249,6 +252,37 @@ once per Ecobee-supplied interval, with automatic backoff on `slow_down`.
   `/thermostatSummary` traffic for a ~200-install population) is in the
   subsection **Operator short `longPoll` (fix L) — substantial fleet impact**
   under *Illustrative fleet scale* below.
+
+### M. Weather omitted by default (`includeWeather` + GV9 + one-time migration)
+
+- **Default:** Thermostat driver **GV9 (Weather)** now defaults to **off**
+  in `driversMap`, and routine `GET /1/thermostat` calls use
+  `includeWeather: false` unless GV9 is **on** for that thermostat.
+  Forecast and current-weather data are not separate HTTP calls in this
+  plugin; they are embedded in the same thermostat JSON when
+  `includeWeather` is true. Skipping it **does not reduce the number of
+  GETs** per poll cycle, but it **materially shrinks response bodies** and
+  Ecobee-side work per response for the majority of installs that do not
+  need weather in ISY.
+- **One-time migration (3.1.7):** On the **first** nodeserver start after
+  upgrading from before **3.1.7**, **every** existing thermostat has GV9
+  forced to **off**, weather/forecast child nodes removed, and
+  `includeWeather` omitted on subsequent refreshes until the operator turns
+  Weather back **on** in the Admin Console. The nodeserver stores the last
+  applied migration level in custom data as **`ns_data_version`** (semver
+  string, same as the running package version after migrations run), so
+  **future releases can add more one-time steps** by comparing
+  `ns_data_version` to new thresholds in `_apply_version_migrations`.
+  Turning Weather **on** triggers an immediate `includeWeather: true`
+  fetch for that thermostat so nodes repopulate without waiting for the next
+  revision change.
+- **Why this helps Ecobee:** Under healthy polling, `/thermostatSummary`
+  volume is unchanged, but each follow-on `GET /1/thermostat` for a
+  changed thermostat is a smaller payload when weather is off fleet-wide.
+  That reduces bytes moved per install per long poll, lowers JSON parse
+  cost on both sides, and aligns default behavior with users who never
+  used weather in automation—while keeping an explicit opt-in for those
+  who do.
 
 ## Expected impact on Ecobee API traffic
 
@@ -321,11 +355,13 @@ installs that is about **4,000 summary GETs per hour** (about **96,000 per
 day**). That headline rate is what we target **after** fix **L**; prior to
 it, the same nominal “200 install” fleet could sit materially **above** that
 if many operators used shorter intervals, as quantified in the previous
-paragraph. Separately from request **count**, routine detail refreshes
-benefit from **payload size**: `GET /1/thermostat` now uses a trimmed
-selection (`getThermostatRuntime`) instead of all 13 include flags, which
-reduces bytes per response when Ecobee reports a revision change, without
-increasing request count.
+paragraph. Separately from request **count**, routine detail refreshes benefit from
+**payload size**: `GET /1/thermostat` uses a trimmed selection
+(`getThermostatRuntime`) instead of all 13 include flags, and **fix M**
+omits the `weather` section entirely unless the operator has enabled
+Weather (GV9) for that thermostat. That further reduces bytes per
+`thermostat` GET for most installs after upgrade, without increasing
+request count.
 
 **Recovery / discover path (where request count actually drops):** On
 the old code path, a single `longPoll` while `discover_st` was false

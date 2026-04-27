@@ -30,7 +30,7 @@ Install from the Polyglot 3 store.
 1. Login to the Ecobee web page, click on your profile, then click 'My Apps' > 'Add Application'.
 1. You will be prompted to enter the PIN provided.
 1. The nodeserver will check every 60 seconds that you have completed the approval so do not restart the nodeserver. You can monitor the log to see when the approval is recognized.
-1. Your thermostat will be added to ISY, along with nodes for any sensors, a node for the current weather, and a node for the forecast.
+1. Your thermostat will be added to ISY, along with nodes for any sensors. **Current Weather** and **Forecast** child nodes are created only when you turn **Weather** on for that thermostat (driver **GV9**); default is off from 3.1.7 to reduce Ecobee response size on each refresh.
 
 After the first run. It will refresh any changes on each Polyglot **long
 poll**. Ecobee documents on the order of **3 minutes** as a reasonable
@@ -51,6 +51,15 @@ intervals (for example 300 seconds) are still honored as configured.
 
 ## Settings
 
+- **Weather (GV9)** on each thermostat node: **off** by default (from
+  3.1.7). When off, the nodeserver does not request Ecobee's `weather`
+  block on routine refreshes (smaller API responses). Set to **on** in
+  the Admin Console to add/update the **Ecobee - Weather** and **Ecobee -
+  Forecast** child nodes; the nodeserver performs one immediate refresh
+  with weather data when you enable it. On **first restart after upgrading
+  to 3.1.7**, Weather is turned **off** on all thermostats once. The
+  nodeserver records the applied version in custom data as **`ns_data_version`**
+  for future one-time migrations. Turn GV9 back on if you still want weather in ISY.
 - The "Schedule Mode" is one of
   1. Running
   1. Hold Next
@@ -85,6 +94,16 @@ When a new release is published, it should be released to the polyglot web store
 
 
 ## Release Notes
+- 3.1.7: 04/26/2026
+  - **Weather off by default:** thermostat **GV9** defaults to off; routine
+    Ecobee `GET /1/thermostat` omits `includeWeather` unless GV9 is on
+    (smaller payloads). Turning Weather **on** triggers an immediate
+    weather fetch for that thermostat.
+  - **One-time migration on first 3.1.7 start:** forces GV9 off and removes
+    weather/forecast child nodes for existing installs. **`ns_data_version`**
+    in custom data records the last applied migration level for future
+    upgrades. Re-enable Weather in the Admin Console if desired. See
+    `ECOBEE_POLLING_RESPONSE.md` fix **M** for Ecobee-facing rationale.
 - 3.1.6: 04/26/2026
   - Enforce **minimum Polyglot long poll of 180 seconds** (Ecobee-recommended
     summary interval). Lower Dashboard values are clamped at runtime with a

@@ -25,6 +25,31 @@ ECOBEE_API_URL = 'api.ecobee.com'
 # data. Polyglot allows operators to set `longPoll` arbitrarily low (e.g.
 # 60 seconds), which multiplied API traffic fleet-wide; we clamp below.
 ECOBEE_MIN_LONGPOLL_SEC = 180
+# Stored in Polyglot customData: last nodeserver version that applied Data
+# migrations. Increment/compare in _apply_version_migrations for future
+# one-time upgrades (see _migrate_weather_defaults_for_3_1_7).
+NS_DATA_VERSION_KEY = 'ns_data_version'
+
+
+def _semver_tuple(ver):
+    """Parse '3.1.7' into (3, 1, 7) for ordering. Missing/invalid -> (0, 0, 0)."""
+    if ver is None or ver is False:
+        return (0, 0, 0)
+    s = str(ver).strip().lstrip('vV')
+    parts = s.split('.')[:3]
+    out = []
+    for p in parts:
+        n = ''
+        for c in p:
+            if c.isdigit():
+                n += c
+            else:
+                break
+        out.append(int(n) if n else 0)
+    while len(out) < 3:
+        out.append(0)
+    return tuple(out)
+
 
 class Controller(Node):
     def __init__(self, poly, primary, address, name):
@@ -163,6 +188,7 @@ class Controller(Node):
         #
         self.ready = True
         self.discover()
+        self._apply_version_migrations()
         LOGGER.debug('done')
 
     def handler_config(self, cfg_data):
@@ -732,7 +758,8 @@ class Controller(Node):
                     # extendedRuntime, location, utility, and version from
                     # routine refreshes, reducing payload sizes ~30-50%
                     # without breaking any consumer in Thermostat.update().
-                    fullData = self.getThermostatRuntime(thermostatId)
+                    include_wx = self._thermostat_wants_weather(tnode)
+                    fullData = self.getThermostatRuntime(thermostatId, include_weather=include_wx)
                     if fullData is not False:
                         tnode.update(thermostat, fullData)
                     else:
@@ -803,7 +830,7 @@ class Controller(Node):
             address = self.thermostatIdToAddress(thermostatId)
             tnode   = self.poly.getNode(address)
             if tnode is None:
-                fullData = self.getThermostatFull(thermostatId)
+                fullData = self.getThermostatRuntime(thermostatId, include_weather=False)
                 if fullData is not False:
                     tstat = fullData['thermostatList'][0]
                     useCelsius = True if tstat['settings']['useCelsius'] else False
@@ -1019,13 +1046,55 @@ class Controller(Node):
                 }
         return thermostats
 
-    def getThermostatRuntime(self, id):
+    def _thermostat_wants_weather(self, tnode):
+        """True when the thermostat node has Weather (GV9) enabled in ISY."""
+        if tnode is None or not isinstance(tnode, Thermostat):
+            return False
+        if tnode.do_weather is True:
+            return True
+        if tnode.do_weather is False:
+            return False
+        try:
+            return int(tnode.getDriver('GV9')) != 0
+        except (TypeError, ValueError):
+            return False
+
+    def _apply_version_migrations(self):
+        """Run one-time customData migrations when upgrading across versions."""
+        from nodes import VERSION
+        current = str(VERSION)
+        stored = self.Data.get(NS_DATA_VERSION_KEY)
+        effective = stored if stored else '0.0.0'
+        t_eff = _semver_tuple(effective)
+        t_cur = _semver_tuple(current)
+
+        if t_eff < (3, 1, 7) <= t_cur:
+            self._migrate_weather_defaults_for_3_1_7()
+
+        # Future: if t_eff < (3, 2, 0) <= t_cur: self._migrate_...
+
+        self.Data[NS_DATA_VERSION_KEY] = current
+
+    def _migrate_weather_defaults_for_3_1_7(self):
+        """Turn Weather (GV9) off on every thermostat; omit includeWeather until re-enabled."""
+        LOGGER.info(
+            'Ecobee NS 3.1.7: version migration — Weather (GV9) set off on all '
+            'thermostats; routine Ecobee GETs omit includeWeather until you '
+            're-enable Weather on each thermostat in the Admin Console.')
+        for node in self.poly.nodes():
+            if isinstance(node, Thermostat):
+                node.setDriver('GV9', 0)
+                node.do_weather = False
+                node.check_weather()
+                node.reportDrivers()
+
+    def getThermostatRuntime(self, id, include_weather=False):
         # Fix F: lean selection used for routine refresh from longPoll. We
         # include only the fields that Thermostat._update() actually reads:
         # settings, program, events, runtime, equipmentStatus, sensors,
-        # energy, weather. Everything else (alerts, extendedRuntime,
-        # location, utility, version) is fetched only on profile rebuild
-        # or initial discover via getThermostatFull().
+        # energy, and optionally weather when GV9 is enabled. Everything else
+        # (alerts, extendedRuntime, location, utility, version) is fetched
+        # only on profile rebuild or via getThermostatFull() if needed later.
         return self.getThermostatSelection(id,
                                            includeEvents=True,
                                            includeProgram=True,
@@ -1034,7 +1103,7 @@ class Controller(Node):
                                            includeEquipmentStatus=True,
                                            includeSensors=True,
                                            includeEnergy=True,
-                                           includeWeather=True)
+                                           includeWeather=include_weather)
 
     def getThermostatFull(self, id):
         return self.getThermostatSelection(id,True,True,True,True,True,True,True,True,True,True,True,True,True)
