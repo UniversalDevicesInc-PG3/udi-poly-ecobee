@@ -32,7 +32,22 @@ Install from the Polyglot 3 store.
 1. The nodeserver will check every 60 seconds that you have completed the approval so do not restart the nodeserver. You can monitor the log to see when the approval is recognized.
 1. Your thermostat will be added to ISY, along with nodes for any sensors, a node for the current weather, and a node for the forecast.
 
-After the first run. It will refresh any changes every 3 minutes. This is a limitation imposed by Ecobee.
+After the first run. It will refresh any changes on each Polyglot **long
+poll**. Ecobee documents on the order of **3 minutes** as a reasonable
+interval for summary polling.
+
+### Polyglot long poll interval
+
+In the Polyglot Dashboard, each nodeserver has a **long poll** interval
+(in **seconds**). **This plugin enforces a minimum of 180 seconds (3
+minutes).** If you set a lower value, the nodeserver logs a warning and
+still polls Ecobee at most once every 180 seconds.
+
+Previously there was no minimum in code. Some operators reduced long poll
+to **60** or **120** seconds (or lower), which **multiplied**
+`/thermostatSummary` traffic for those installs and contributed to
+aggregate load against Ecobee far beyond the documented guidance. Longer
+intervals (for example 300 seconds) are still honored as configured.
 
 ## Settings
 
@@ -70,6 +85,15 @@ When a new release is published, it should be released to the polyglot web store
 
 
 ## Release Notes
+- 3.1.6: 04/26/2026
+  - Enforce **minimum Polyglot long poll of 180 seconds** (Ecobee-recommended
+    summary interval). Lower Dashboard values are clamped at runtime with a
+    log warning; previously aggressive settings could drive excessive
+    `/thermostatSummary` traffic.
+  - Polling compliance hardening (HTTP retries, 429 handling, PIN interval,
+    discover/update deduplication, profile fetch reduction, manual POLL
+    throttle, etc.); see `ECOBEE_POLLING_RESPONSE.md` for Ecobee-facing
+    detail.
 - 3.1.5: 11/11/2023
   - Fix: [Setting Climate Type doesn't set proper hold mode](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues/10)
 - 3.1.4: 08/15/2023

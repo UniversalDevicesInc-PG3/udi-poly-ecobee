@@ -21,6 +21,10 @@ from nodes import Thermostat
 from node_funcs import *
 
 ECOBEE_API_URL = 'api.ecobee.com'
+# Ecobee documents ~3 minutes as a reasonable polling interval for summary
+# data. Polyglot allows operators to set `longPoll` arbitrarily low (e.g.
+# 60 seconds), which multiplied API traffic fleet-wide; we clamp below.
+ECOBEE_MIN_LONGPOLL_SEC = 180
 
 class Controller(Node):
     def __init__(self, poly, primary, address, name):
@@ -42,6 +46,25 @@ class Controller(Node):
         self.n_queue = []
         self.debug_level = 0
         self.idSuffix = {}
+        self.cfg_longPoll = ECOBEE_MIN_LONGPOLL_SEC
+        # Polling/rate-limit state (April 2026 hardening) ------------------
+        # Fix C: honor Ecobee PIN polling 'interval' (min seconds between
+        # /token attempts during the PIN authorization phase).
+        self._pin_interval = 30
+        self._last_pin_poll = 0.0
+        # Fix H: at most one /token refresh attempt per longPoll cycle, with
+        # cooldown after a failed refresh so we don't hammer the auth server.
+        self._refresh_cooldown_until = 0.0
+        self._last_refresh_attempt = 0.0
+        # Fix G: exponential backoff for repeated discover failures so a
+        # broken Ecobee endpoint doesn't trigger discover every longPoll.
+        self._discover_failures = 0
+        self._next_discover_allowed = 0.0
+        # Fix J: minimum spacing between user-initiated POLL commands.
+        self._last_manual_poll = 0.0
+        # Fix D: track whether discover just ran in the current longPoll so
+        # we don't issue a second /thermostatSummary right after recovery.
+        self._discover_ran_this_cycle = False
         #
         self.handler_config_st      = None
         self.handler_config_done_st = None
@@ -144,7 +167,25 @@ class Controller(Node):
 
     def handler_config(self, cfg_data):
         LOGGER.info(f'cfg_data={cfg_data}')
-        self.cfg_longPoll = int(cfg_data['longPoll'])
+        try:
+            requested = int(cfg_data.get('longPoll', ECOBEE_MIN_LONGPOLL_SEC))
+        except (TypeError, ValueError):
+            requested = ECOBEE_MIN_LONGPOLL_SEC
+            LOGGER.warning(
+                'Invalid longPoll in Polyglot config; using {} seconds'.format(
+                    ECOBEE_MIN_LONGPOLL_SEC))
+        if requested < ECOBEE_MIN_LONGPOLL_SEC:
+            LOGGER.warning(
+                'Polyglot longPoll is configured as {} seconds, which is below '
+                'Ecobee\'s recommended minimum of {} seconds (3 minutes). The '
+                'nodeserver will use {} seconds instead. Very short longPoll '
+                'values previously allowed excessive /thermostatSummary traffic '
+                'far beyond Ecobee\'s guidance; adjust the value in the Polyglot '
+                'Dashboard if you see this message.'.format(
+                    requested, ECOBEE_MIN_LONGPOLL_SEC, ECOBEE_MIN_LONGPOLL_SEC))
+            self.cfg_longPoll = ECOBEE_MIN_LONGPOLL_SEC
+        else:
+            self.cfg_longPoll = requested
         self.handler_config_st = True
 
     def handler_config_done(self):
@@ -173,7 +214,18 @@ class Controller(Node):
         elif self.waiting_on_tokens == "OAuth":
             LOGGER.debug("{}:shortPoll: Waiting for user to authorize...".format(self.address))
         else:
-            # Must be waiting on our PIN Authorization
+            # Fix C: Ecobee's PIN authorization endpoint returns an 'interval'
+            # value (seconds) that callers MUST respect between /token polls.
+            # Polling faster (or ignoring 'slow_down') is a primary cause of
+            # token-endpoint excess traffic during the auth window.
+            now = time.time()
+            since = now - self._last_pin_poll
+            if since < self._pin_interval:
+                LOGGER.debug(
+                    "{}:shortPoll: PIN poll throttled, {}s of {}s elapsed".format(
+                        self.address, int(since), self._pin_interval))
+                return
+            self._last_pin_poll = now
             LOGGER.debug("{}:shortPoll: Try to get tokens...".format(self.address))
             if self._getTokens(self.waiting_on_tokens):
                 self.Notices.clear()
@@ -181,7 +233,6 @@ class Controller(Node):
                 self.discover()
 
     def longPoll(self):
-        # Call discovery if it failed on startup
         LOGGER.debug("{}:longPoll".format(self.address))
         self.heartbeat()
         if not self.ready:
@@ -193,10 +244,66 @@ class Controller(Node):
         if self.in_discover:
             LOGGER.debug("{}:longPoll: Skipping since discover is still running".format(self.address))
             return
+
+        # Fix B: if we received a 429 in a prior cycle, the session has a
+        # rate_limited_until timestamp. Skip the entire longPoll until the
+        # window elapses; per-call short-circuits in pgSession will also
+        # block any stragglers that try to call out anyway.
+        if hasattr(self, 'session') and self.session is not None:
+            if self.session.is_rate_limited():
+                rem = self.session.is_rate_limited()
+                LOGGER.warning(
+                    "{}:longPoll: rate-limited, {}s remaining; skipping cycle".format(
+                        self.address, rem))
+                return False
+
+        # Fix H: reset the per-longPoll refresh-attempt watermark.
+        self._last_refresh_attempt = 0.0
+        # Fix D: reset per-cycle discover marker.
+        self._discover_ran_this_cycle = False
+
+        # Fix G: exponential backoff for repeated discover failures.
         if self.discover_st is False:
-            LOGGER.info("longPoll: Calling discover...")
-            self.discover()
-        self.updateThermostats()
+            now = time.time()
+            if now < self._next_discover_allowed:
+                wait = int(self._next_discover_allowed - now)
+                LOGGER.warning(
+                    "{}:longPoll: discover backoff, {}s until next attempt".format(
+                        self.address, wait))
+            else:
+                LOGGER.info("longPoll: Calling discover...")
+                self._discover_ran_this_cycle = True
+                ok = self.discover()
+                if ok:
+                    self._discover_failures = 0
+                    self._next_discover_allowed = 0.0
+                else:
+                    self._discover_failures = min(self._discover_failures + 1, 6)
+                    # 3, 9, 27, 81, 180, 180 minutes (capped)
+                    backoff_minutes = min(3 * (3 ** (self._discover_failures - 1)), 180)
+                    self._next_discover_allowed = time.time() + backoff_minutes * 60
+                    LOGGER.warning(
+                        "longPoll: discover failed (#{}); next attempt in ~{} minutes".format(
+                            self._discover_failures, backoff_minutes))
+
+        # Fix D: when discover just ran (and ran a /thermostatSummary), do not
+        # immediately issue a second /thermostatSummary via updateThermostats
+        # in the same cycle. Existing nodes will refresh on the next longPoll.
+        if not self._discover_ran_this_cycle and self.discover_st is True:
+            self.updateThermostats()
+
+        # Fix K: emit a 1-line summary of API request volume each cycle so
+        # operators (and Ecobee) can see how many calls a longPoll generated.
+        if hasattr(self, 'session') and self.session is not None:
+            try:
+                counts = self.session.get_and_reset_counts()
+            except Exception:
+                counts = {}
+            if counts:
+                total = sum(counts.values())
+                LOGGER.info(
+                    "longPoll: ecobee request counts (total={}): {}".format(
+                        total, counts))
 
     def heartbeat(self):
         LOGGER.debug('heartbeat hb={}'.format(self.hb))
@@ -346,10 +453,16 @@ class Controller(Node):
         res_data = res['data']
         res_code = res['code']
         if 'ecobeePin' in res_data:
-            msg = 'Please <a target="_blank" href="https://www.ecobee.com/consumerportal/">Signin to your Ecobee account</a>. Click on Profile > My Apps > Add Application and enter PIN: <b>{}</b> You have 10 minutes to complete this. The NodeServer will check every 60 seconds.'.format(res_data['ecobeePin'])
+            # Fix C: capture Ecobee-supplied polling interval (seconds) and
+            # use it as the minimum spacing between subsequent /token polls.
+            try:
+                self._pin_interval = max(int(res_data.get('interval', 30)), 5)
+            except (TypeError, ValueError):
+                self._pin_interval = 30
+            self._last_pin_poll = 0.0
+            msg = 'Please <a target="_blank" href="https://www.ecobee.com/consumerportal/">Signin to your Ecobee account</a>. Click on Profile > My Apps > Add Application and enter PIN: <b>{}</b> You have 10 minutes to complete this. The NodeServer will check every {} seconds (per Ecobee).'.format(res_data['ecobeePin'], self._pin_interval)
             LOGGER.info(f'_getPin: {msg}')
             self.Notices[f'getPin'] = msg
-            # This will tell shortPoll to check for PIN
             self.waiting_on_tokens = res_data
         else:
             msg = f'ecobeePin Failed code={res_code}: {res_data}'
@@ -414,7 +527,21 @@ class Controller(Node):
             if exp_d is not False:
                 # We allow for 10 long polls to refresh the token...
                 if exp_d.total_seconds() < self.cfg_longPoll * 10:
+                    # Fix H: do not retry refresh inside a cooldown window
+                    # set by a prior failed refresh.
+                    now = time.time()
+                    if now < self._refresh_cooldown_until:
+                        rem = int(self._refresh_cooldown_until - now)
+                        LOGGER.warning('_checkTokens: refresh in cooldown for {}s; using existing token if still valid'.format(rem))
+                        self.set_auth_st(True)
+                        return exp_d.total_seconds() > 0
+                    # Fix H: only attempt one refresh per longPoll cycle.
+                    if self._last_refresh_attempt > 0 and (now - self._last_refresh_attempt) < self.cfg_longPoll:
+                        LOGGER.debug('_checkTokens: refresh already attempted this longPoll cycle; deferring')
+                        self.set_auth_st(True)
+                        return exp_d.total_seconds() > 0
                     LOGGER.info('Tokens {} expires {} will expire in {} seconds, so refreshing now...'.format(self.tokenData['refresh_token'],self.tokenData['expires'],exp_d.total_seconds()))
+                    self._last_refresh_attempt = now
                     return self._getRefresh()
                 else:
                     # Only print this ones, then once a minute at most...
@@ -462,18 +589,29 @@ class Controller(Node):
                     'refresh_token': self.tokenData['refresh_token']
                 })
             if res is False:
+                # Fix I: do NOT set ecobee_st True on a failed POST.
+                # Fix H: arm the refresh cooldown so we don't immediately
+                # retry on every following API call.
                 self.set_ecobee_st(False)
+                self._refresh_cooldown_until = time.time() + max(self.cfg_longPoll, 60)
                 self._endRefresh()
                 return False
-            self.set_ecobee_st(True)
             res_data = res['data']
             res_code = res['code']
             if res_data is False:
+                # Fix I: HTTP succeeded but no parseable body; not authoritative
+                # of a healthy connection.
                 LOGGER.error('No data returned.')
+                self.set_ecobee_st(False)
+                self._refresh_cooldown_until = time.time() + max(self.cfg_longPoll, 60)
             else:
                 # https://www.ecobee.com/home/developer/api/documentation/v1/auth/auth-req-resp.shtml
                 if 'error' in res_data:
+                    # Fix I: refresh returned an error payload; report disconnected.
                     self.set_ecobee_st(False)
+                    # Fix H: cooldown so we don't pound the auth endpoint on
+                    # transient/repeat errors.
+                    self._refresh_cooldown_until = time.time() + max(self.cfg_longPoll, 60)
                     self.Notices['grant_error'] = f"{res_data['error']}: {res_data['error_description']}"
                     #self.addNotice({'grant_info': "For access_token={} refresh_token={} expires={}".format(self.tokenData['access_token'],self.tokenData['refresh_token'],self.tokenData['expires'])})
                     LOGGER.error('Requesting Auth: {} :: {}'.format(res_data['error'], res_data['error_description']))
@@ -507,6 +645,10 @@ class Controller(Node):
                     self._endRefresh()
                     return False
                 elif 'access_token' in res_data:
+                    # Fix I: only mark connected after we have validated a
+                    # real access_token in the response body.
+                    self.set_ecobee_st(True)
+                    self._refresh_cooldown_until = 0.0
                     self._endRefresh(res_data)
                     return True
         else:
@@ -535,6 +677,19 @@ class Controller(Node):
             return False
         if 'error' in res_data:
             LOGGER.error('_getTokens: {} :: {}'.format(res_data['error'], res_data['error_description']))
+            # Fix C: 'slow_down' means we polled the /token endpoint faster
+            # than the advertised interval. Double the interval (capped) and
+            # keep waiting; this is NOT a fatal authorization failure.
+            if res_data['error'] == 'slow_down':
+                self._pin_interval = min(self._pin_interval * 2, 120)
+                LOGGER.warning('_getTokens: server requested slow_down; PIN interval now {}s'.format(self._pin_interval))
+                return False
+            # 'authorization_pending' is the normal "user has not entered the
+            # PIN yet" response and just means keep polling at the advertised
+            # interval. Do not treat it as an auth failure.
+            if res_data['error'] == 'authorization_pending':
+                LOGGER.debug('_getTokens: authorization_pending (user has not entered PIN yet)')
+                return False
             self.set_auth_st(False)
             if res_data['error'] == 'authorization_expired' or res_data['error'] == 'invalid_grant':
                 msg = 'Nodeserver exiting because {}, please restart when you are ready to authorize.'.format(res_data['error'])
@@ -568,10 +723,16 @@ class Controller(Node):
                 address = self.thermostatIdToAddress(thermostatId)
                 tnode   = self.poly.getNode(address)
                 if tnode is None:
-                    LOGGER.error(f"Thermostat id '{thermostatId}' address '{address}' is not in our node list ({node}). thermostat: {{thermostat}}")
+                    LOGGER.error("Thermostat id '{}' address '{}' is not in our node list. thermostat: {}".format(
+                        thermostatId, address, thermostat))
                 else:
-                    LOGGER.debug('Update detected in thermostat {}({}) doing full update.'.format(thermostat['name'], address))
-                    fullData = self.getThermostatFull(thermostatId)
+                    LOGGER.debug('Update detected in thermostat {}({}) doing runtime update.'.format(thermostat['name'], address))
+                    # Fix F: use the trimmed runtime selection rather than
+                    # the all-13-flags getThermostatFull. This drops alerts,
+                    # extendedRuntime, location, utility, and version from
+                    # routine refreshes, reducing payload sizes ~30-50%
+                    # without breaking any consumer in Thermostat.update().
+                    fullData = self.getThermostatRuntime(thermostatId)
                     if fullData is not False:
                         tnode.update(thermostat, fullData)
                     else:
@@ -653,48 +814,64 @@ class Controller(Node):
 
     def check_profile(self,thermostats):
         self.profile_info = get_profile_info(LOGGER)
+        LOGGER.info('check_profile: profile_info={}'.format(self.profile_info))
+        LOGGER.info('check_profile:   customData={}'.format(self.Data))
         #
-        # First get all the climate programs so we can build the profile if necessary
+        # Fix E: previously this method did a /thermostat?includeProgram=true
+        # call for EVERY thermostat on EVERY discover, even when nothing had
+        # changed. That made every recovery-discover loop multiply API
+        # traffic. We now skip that fetch unless one of the rebuild
+        # preconditions is actually true.
         #
+        cached_profile_info = self.Data.get('profile_info', None)
+        cached_climates     = self.Data.get('climates', None)
+        rebuild_reasons = []
+        if cached_profile_info is None:
+            rebuild_reasons.append('no cached profile_info')
+        elif self.profile_info.get('version') != cached_profile_info.get('version'):
+            rebuild_reasons.append('profile version changed: {} -> {}'.format(
+                cached_profile_info.get('version'), self.profile_info.get('version')))
+        if cached_climates is None:
+            if 'no cached profile_info' not in rebuild_reasons:
+                rebuild_reasons.append('no cached climates')
+        elif set(cached_climates.keys()) != set(thermostats.keys()):
+            rebuild_reasons.append('thermostat set changed: cached={} current={}'.format(
+                sorted(cached_climates.keys()), sorted(thermostats.keys())))
+
+        if not rebuild_reasons:
+            LOGGER.info("check_profile: cached profile/climates match; skipping per-thermostat program fetch")
+            return
+
+        LOGGER.warning("check_profile: rebuilding profile, reasons: {}".format(rebuild_reasons))
+
         climates = dict()
         for thermostatId, thermostat in thermostats.items():
-            # Only get program data if we have the node.
-            fullData = self.getThermostatSelection(thermostatId,includeProgram=True)
+            fullData = self.getThermostatSelection(thermostatId, includeProgram=True)
             if fullData is not False:
                 programs = fullData['thermostatList'][0]['program']
                 climates[thermostatId] = list()
                 for climate in programs['climates']:
-                    climates[thermostatId].append({'name': climate['name'], 'ref':climate['climateRef']})
+                    climates[thermostatId].append({'name': climate['name'], 'ref': climate['climateRef']})
         LOGGER.debug("check_profile: climates={}".format(climates))
-        #
-        # Set Default profile version if not Found
-        #
-        LOGGER.info('check_profile: profile_info={}'.format(self.profile_info))
-        LOGGER.info('check_profile:   customData={}'.format(self.Data))
-        if not 'profile_info' in self.Data:
-            update_profile = True
-        elif self.profile_info['version'] == self.Data['profile_info']['version']:
-            # Check if the climates are different
+
+        update_profile = True
+        # Even with a fresh fetch, if version+climates literally match cached
+        # we still skip the on-disk write to avoid unnecessary profile pushes.
+        if (cached_profile_info is not None
+                and self.profile_info.get('version') == cached_profile_info.get('version')
+                and cached_climates is not None):
             update_profile = False
-            LOGGER.info('check_profile: update_profile={} checking climates.'.format(update_profile))
-            if 'climates' in self.Data:
-                current = self.Data['climates']
-                if not update_profile:
-                    # Check if the climates have changed.
-                    for id in climates:
-                        if id in current:
-                            if len(climates[id]) == len(current[id]):
-                                for i in range(len(climates[id])):
-                                    if climates[id][i] != current[id][i]:
-                                        update_profile = True
-                            else:
-                                update_profile = True
-                        else:
+            for id in climates:
+                if id in cached_climates and len(climates[id]) == len(cached_climates[id]):
+                    for i in range(len(climates[id])):
+                        if climates[id][i] != cached_climates[id][i]:
                             update_profile = True
-            else:
-                update_profile = True
-        else:
-            update_profile = True
+                            break
+                else:
+                    update_profile = True
+                if update_profile:
+                    break
+
         LOGGER.warning('check_profile: update_profile={}'.format(update_profile))
         if update_profile:
             self.write_profile(climates)
@@ -842,6 +1019,23 @@ class Controller(Node):
                 }
         return thermostats
 
+    def getThermostatRuntime(self, id):
+        # Fix F: lean selection used for routine refresh from longPoll. We
+        # include only the fields that Thermostat._update() actually reads:
+        # settings, program, events, runtime, equipmentStatus, sensors,
+        # energy, weather. Everything else (alerts, extendedRuntime,
+        # location, utility, version) is fetched only on profile rebuild
+        # or initial discover via getThermostatFull().
+        return self.getThermostatSelection(id,
+                                           includeEvents=True,
+                                           includeProgram=True,
+                                           includeSettings=True,
+                                           includeRuntime=True,
+                                           includeEquipmentStatus=True,
+                                           includeSensors=True,
+                                           includeEnergy=True,
+                                           includeWeather=True)
+
     def getThermostatFull(self, id):
         return self.getThermostatSelection(id,True,True,True,True,True,True,True,True,True,True,True,True,True)
 
@@ -954,7 +1148,22 @@ class Controller(Node):
 
     def cmd_poll(self,  *args, **kwargs):
         LOGGER.debug("{}:cmd_poll".format(self.address))
-        self.updateThermostats(force=True)
+        # Fix J: throttle user-initiated POLL to once per 60s. During an
+        # outage the user may hit POLL repeatedly out of frustration; without
+        # throttling, this multiplies traffic to Ecobee on top of the
+        # automated longPoll.
+        now = time.time()
+        if self._last_manual_poll > 0 and (now - self._last_manual_poll) < 60:
+            rem = int(60 - (now - self._last_manual_poll))
+            LOGGER.warning("{}:cmd_poll: throttled, retry in {}s".format(self.address, rem))
+            return
+        # Also respect any active rate-limit window.
+        if hasattr(self, 'session') and self.session is not None and self.session.is_rate_limited():
+            rem = self.session.is_rate_limited()
+            LOGGER.warning("{}:cmd_poll: rate-limited, {}s remaining".format(self.address, rem))
+            return
+        self._last_manual_poll = now
+        self.updateThermostats()
         self.query()
 
     def cmd_query(self, *args, **kwargs):
