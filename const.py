@@ -58,6 +58,11 @@ ecoMap = {
 }
 
 driversMap = {
+  'ECO_CTR': [
+    { 'driver': 'ST', 'value': 0, 'uom': '25', 'name': 'Controller Status' },
+    { 'driver': 'GV1', 'value': 0, 'uom': '2', 'name': 'Ecobee / Hub Connection' },
+    { 'driver': 'GV3', 'value': 0, 'uom': '2', 'name': 'Authorized / Paired' },
+  ],
   'EcobeeF': [
     { 'driver': 'ST',     'value': 0,  'uom': '17', 'name': 'Temperature' },
     { 'driver': 'CLISPH', 'value': 0,  'uom': '17', 'name': 'Heat Setpoint'  },
@@ -101,6 +106,31 @@ driversMap = {
     { 'driver': 'GV10',   'value': 10, 'uom': '56', 'name': 'Backlight On Intensity'  },
     { 'driver': 'GV11',   'value': 10, 'uom': '56', 'name': 'Backlight Sleep Intensity'  },
     { 'driver': 'GV17',   'value': 0,  'uom': '25', 'name': 'ECO+'  }
+  ],
+  # HomeKit hub path: subset of EcobeeF/C (see README "HomeKit thermostat node").
+  'EcobeeHKF': [
+    { 'driver': 'ST',     'value': 0,  'uom': '17', 'name': 'Temperature' },
+    { 'driver': 'CLISPH', 'value': 0,  'uom': '17', 'name': 'Heat Setpoint'  },
+    { 'driver': 'CLISPC', 'value': 0,  'uom': '17', 'name': 'Cool Setpoint'  },
+    { 'driver': 'CLIMD',  'value': 0,  'uom': '67', 'name': 'Mode'  },
+    { 'driver': 'CLIFS',  'value': 0,  'uom': '68', 'name': 'Fan Mode'  },
+    { 'driver': 'CLIHUM', 'value': 0,  'uom': '22', 'name': 'Humidity'  },
+    { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
+    { 'driver': 'CLIFRS', 'value': 0,  'uom': '80', 'name': 'Fan State'  },
+    { 'driver': 'GV1',    'value': 0,  'uom': '22', 'name': 'Humidification Setpoint'  },
+    { 'driver': 'GV3',    'value': 0,  'uom': '25', 'name': 'Climate / program (from hub)'  },
+  ],
+  'EcobeeHKC': [
+    { 'driver': 'ST',     'value': 0,  'uom': '4', 'name': 'Temperature' },
+    { 'driver': 'CLISPH', 'value': 0,  'uom': '4', 'name': 'Heat Setpoint'  },
+    { 'driver': 'CLISPC', 'value': 0,  'uom': '67', 'name': 'Cool Setpoint'  },
+    { 'driver': 'CLIMD',  'value': 0,  'uom': '68', 'name': 'Mode'  },
+    { 'driver': 'CLIFS',  'value': 0,  'uom': '68', 'name': 'Fan Mode'  },
+    { 'driver': 'CLIHUM', 'value': 0,  'uom': '22', 'name': 'Humidity'  },
+    { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
+    { 'driver': 'CLIFRS', 'value': 0,  'uom': '80', 'name': 'Fan State'  },
+    { 'driver': 'GV1',    'value': 0,  'uom': '22', 'name': 'Humidification Setpoint'  },
+    { 'driver': 'GV3',    'value': 0,  'uom': '25', 'name': 'Climate / program (from hub)'  },
   ],
   'EcobeewAQF': [
     { 'driver': 'ST',     'value': 0,  'uom': '17', 'name': 'Temperature' },
@@ -163,24 +193,32 @@ driversMap = {
   'EcobeeSensorF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17', 'name': 'Temperature' },
     { 'driver': 'GV1', 'value': 0, 'uom': '25', 'name': 'Occupancy' },
-    { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' }
+    { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' },
+    { 'driver': 'BATLVL', 'value': 0, 'uom': '51', 'name': 'Battery Level' },
+    { 'driver': 'BATLOW', 'value': 0, 'uom': '2', 'name': 'Battery Low' },
   ],
   'EcobeeSensorC': [
-    { 'driver': 'ST', 'value': 0, 'uom': '17', 'name': 'Temperature' },
+    { 'driver': 'ST', 'value': 0, 'uom': '4', 'name': 'Temperature' },
     { 'driver': 'GV1', 'value': 0, 'uom': '25', 'name': 'Occupancy' },
-    { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' }
+    { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' },
+    { 'driver': 'BATLVL', 'value': 0, 'uom': '51', 'name': 'Battery Level' },
+    { 'driver': 'BATLOW', 'value': 0, 'uom': '2', 'name': 'Battery Low' },
   ],
   'EcobeeSensorHF': [
     { 'driver': 'ST', 'value': 0, 'uom': '17', 'name': 'Temperature' },
     { 'driver': 'GV1', 'value': 0, 'uom': '25', 'name': 'Occupancy' },
     { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' },
     { 'driver': 'CLIHUM', 'value': -1, 'uom': '22', 'name': 'Humidity' },
+    { 'driver': 'BATLVL', 'value': 0, 'uom': '51', 'name': 'Battery Level' },
+    { 'driver': 'BATLOW', 'value': 0, 'uom': '2', 'name': 'Battery Low' },
   ],
   'EcobeeSensorHC': [
     { 'driver': 'ST', 'value': 0, 'uom': '4', 'name': 'Temperature' },
     { 'driver': 'GV1', 'value': 0, 'uom': '25', 'name': 'Occupancy' },
     { 'driver': 'GV2', 'value': 0, 'uom': '2', 'name': 'Responding' },
     { 'driver': 'CLIHUM', 'value': -1, 'uom': '22', 'name': 'Humidity' },
+    { 'driver': 'BATLVL', 'value': 0, 'uom': '51', 'name': 'Battery Level' },
+    { 'driver': 'BATLOW', 'value': 0, 'uom': '2', 'name': 'Battery Low' },
   ],
   'EcobeeWeatherF': [
     { 'driver': 'ST',  'value': 0, 'uom': '17', 'name': 'Temperature' },

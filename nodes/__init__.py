@@ -1,6 +1,6 @@
-""" Node classes used by the Ecobee Node Server. """
-VERSION = "3.1.5"
-from .Sensor     import Sensor
-from .Weather    import Weather
-from .Thermostat import Thermostat
+"""Ecobee Node Server: dispatcher Controller + per-backend node implementations."""
+# Bump only when cutting a beta or production store release; keep stable during development.
+VERSION = "4.0.0"
 from .Controller import Controller
+
+__all__ = ["Controller", "VERSION"]

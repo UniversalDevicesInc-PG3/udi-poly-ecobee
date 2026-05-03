@@ -76,3 +76,11 @@ climates.json
 profile/*/custom*.xml
 profile/nls/en_us.txt
 *.zip
+
+# Local Polyglot / runtime artifacts (do not commit)
+*.cert
+*.key
+NS*.lock
+svc.pid
+ecobee_snapshot.txt
+ecobee_watch.txt

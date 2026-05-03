@@ -1,2 +1,4 @@
 requests
 udi_interface>=3.0.31
+websockets>=12.0
+markdown2

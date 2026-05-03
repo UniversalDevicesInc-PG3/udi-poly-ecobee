@@ -22,6 +22,8 @@
       <st id="ST" editor="I_TEMP_C" />
       <st id="GV1" editor="I_TSTAT_OCC" />
       <st id="GV2" editor="BOOL" />
+      <st id="BATLVL" editor="I_BATTERY_PCT" />
+      <st id="BATLOW" editor="BOOL" />
     </sts>
   </nodeDef>
   <nodeDef id="EcobeeSensorF" nodeType="140" nls="140ES" >
@@ -29,6 +31,8 @@
       <st id="ST" editor="I_TEMP_F" />
       <st id="GV1" editor="I_TSTAT_OCC" />
       <st id="GV2" editor="BOOL" />
+      <st id="BATLVL" editor="I_BATTERY_PCT" />
+      <st id="BATLOW" editor="BOOL" />
     </sts>
   </nodeDef>
   <nodeDef id="EcobeeSensorHC" nodeType="140" nls="140ES" >
@@ -37,6 +41,8 @@
       <st id="CLIHUM" editor="I_HUMIDITY" />
       <st id="GV1" editor="I_TSTAT_OCC" />
       <st id="GV2" editor="BOOL" />
+      <st id="BATLVL" editor="I_BATTERY_PCT" />
+      <st id="BATLOW" editor="BOOL" />
     </sts>
   </nodeDef>
   <nodeDef id="EcobeeSensorHF" nodeType="140" nls="140ES" >
@@ -45,6 +51,8 @@
       <st id="CLIHUM" editor="I_HUMIDITY" />
       <st id="GV1" editor="I_TSTAT_OCC" />
       <st id="GV2" editor="BOOL" />
+      <st id="BATLVL" editor="I_BATTERY_PCT" />
+      <st id="BATLOW" editor="BOOL" />
     </sts>
   </nodeDef>
   <nodeDef id="EcobeeSensorMSD" nodeType="140" nls="140ES" >

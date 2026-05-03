@@ -2,6 +2,47 @@
 import os
 import re
 import json
+from typing import Any, Dict, Optional
+
+# Keys internal to udi_interface.Custom (see site-packages/udi_interface/custom.py dump()).
+_CUSTOM_INTERNAL_KEYS = frozenset({'poly', 'custom', '_rawdata', '_extradata'})
+
+
+def customdata_user_snapshot(store: Any) -> Dict[str, Any]:
+    """
+    Build a JSON-serializable dict of user keys from ``udi_interface.Custom``.
+
+    Never use :meth:`Custom.dump` for persistence or MQTT-related logic: ``dump()`` returns the
+    full ``__dict__`` including the non-serializable ``poly`` reference.
+    """
+    if store is None:
+        return {}
+    try:
+        out = {k: store[k] for k in store}
+    except Exception:
+        return {}
+    for k in list(out.keys()):
+        if k in _CUSTOM_INTERNAL_KEYS:
+            del out[k]
+    return out
+
+
+def customdata_load_payload(data: Any) -> Optional[Dict[str, Any]]:
+    """
+    Normalize inbound customdata for :meth:`Custom.load`.
+
+    If a full ``Custom.dump()`` blob was mistakenly passed (e.g. replay bug), recover the real
+    user store from ``_rawdata`` so ``poly`` is never written into persisted customdata.
+    """
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if 'poly' in data and '_rawdata' in data:
+        inner = data.get('_rawdata')
+        if isinstance(inner, dict):
+            return {k: v for k, v in inner.items() if k not in _CUSTOM_INTERNAL_KEYS}
+    return {k: v for k, v in data.items() if k not in _CUSTOM_INTERNAL_KEYS}
 
 
 def ltom(list):

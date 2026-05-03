@@ -4,27 +4,22 @@
 
 If you have any issues are questions you can ask on [PG3 Ecobee NS SubForum](https://forum.universal-devices.com/forum/322-ecobee/) or report an issue at [PG3 Ecobee Github issues](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues).
 
-## Moving from PG2
+## Recommended setup (HomeKit)
 
-There are a few ways to move
+**For new installations, install and configure [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) first**, then this nodeserver.
 
-### Backup and Restore
+1. Add **udi-poly-homekit** from the PG3 store. Pair your Ecobee(s) through that plugin, enable its **WebSocket hub**, and note **`ws_host` / `ws_port`** (and **`ws_token`** if you set one). Typical URL on the same machine as Polyglot: `ws://127.0.0.1:8163`.
+2. Add **udi-poly-ecobee**. If **`backend`** is not already in PG3, it is **seeded** once: **`homekit`** for a brand-new NS, or **`cloud`** when the store still looks like a legacy cloud/OAuth/PIN setup (see **`CONFIG.md`**). Set **`hk_ws_url`** to the hub WebSocket URL and **`hk_ws_token`** if required.
 
-The best way to move from PG2 to PG3 is to backup on PG2 and restore on PG3, but the only option is to do all your nodeservers at once, and it's not really necessary for this nodeserver because it doesn't have any configuration data to setup.  I don't have much information on this method, if you have questions please ask on the PG3 forum.
-
-### Delete and add
-
-If you can't or don't want backup/restore then you can delete the NS on PG2 and install on the same slot on PG2.  You will just need to go thru the authorization procedure again, and change any user settable options on your nodes.  All node addresses will stay the same so all your programs should work after doing an update and save on each one, or rebooting the ISY, especially any using the Controller node since it's ST value has changed.
-
-### Add then delete
-
-Another option is to install in a new slot then go edit all your programs and scenes that reference the nodes and switch to the new slots. If you have customized any settings on the nodes you will need to configure those as well. 
+**Ecobee cloud mode** (REST API) is effectively **unavailable for Universal Devices / Polyglot Cloud OAuth**: Ecobee has **disabled UDI’s access** to the cloud API for this integration. **Cloud mode can only work** if you use **your own Ecobee developer application key** that you obtained **before** Ecobee stopped accepting API traffic for the old shared/UDI keys—and you enter that key in **Custom Params** (**`api_key`**) where applicable (local PIN flow). Do not expect cloud OAuth or the historical UDI key path to work for new setups. Use **HomeKit hub mode** instead.
 
 ## Installation
 
-Install from the Polyglot 3 store.
+Install from the Polyglot 3 store. **New installs:** complete **[Recommended setup (HomeKit)](#recommended-setup-homekit)** so the HomeKit hub is installed, paired, and listening before you point this plugin at **`hk_ws_url`**.
 
-### Initial setup
+### Initial setup (cloud backend only)
+
+These steps apply only when **`backend`** is **`cloud`** and you have a **working personal Ecobee developer API key** (see **Recommended setup** above). They do **not** apply to Polyglot Cloud OAuth anymore.
 
 1. On first start up you will be given a PIN.
 1. Login to the Ecobee web page, click on your profile, then click 'My Apps' > 'Add Application'.
@@ -34,7 +29,60 @@ Install from the Polyglot 3 store.
 
 After the first run. It will refresh any changes every 3 minutes. This is a limitation imposed by Ecobee.
 
+## HomeKit hub mode
+
+This is the **supported** integration path for Ecobee: **[udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit)** must already be **installed, paired to your Ecobee, and exposing its WebSocket hub** before this nodeserver can work in **`backend` = `homekit`**. Default URL is often `ws://127.0.0.1:8163` when the hub runs on the same host as Polyglot. See **[Recommended setup (HomeKit)](#recommended-setup-homekit)** for order of operations.
+
+### What you configure
+
+- In **Custom Params**, **`backend`** defaults to **`homekit`** on new installs; change it only if you intentionally use **cloud** (see caveats above).
+- Set **`hk_ws_url`** to the hub WebSocket URL (see udi-poly-homekit docs for port and TLS).
+- Optionally set **`hk_ws_token`** if the hub requires a hello/auth token.
+- **`use_celsius`**: `auto`, `true`, or `false` (same meaning as cloud; `auto` currently behaves like Fahrenheit for HomeKit in code paths that do not infer from the accessory).
+- **`dry_run`**: default **`true`**. While `true`, thermostat commands are **logged only** and **not** sent to the hub; IoX drivers are not updated from those writes. Set to **`false`** when you are ready for real control. A PG3 **Notice** (`homekit_dry_run`) reminds you when dry run is on.
+
+**Custom Typed Params** (PG3) for HomeKit:
+
+| Section | Purpose |
+| ------- | ------- |
+| **HomeKit thermostat address overrides** | Map hub `device_id` to a thermostat id so the IoX address is `t<id>`. |
+| **HomeKit remote sensor address overrides** | Optional `code` (and `aid` / accessory name) to stabilize `rs_*` sensor addresses. |
+| **Climate program labels** | Per `device_id`: **HomeKit** and **cloud** use the same **climateList** / **CT_*_\<tstat\>*** editors for **GV3**; typed rows override labels by catalog index. |
+
+Full parameter table: **`CONFIG.md`** in this repo (also shown in the PG3 Custom Params doc when configured).
+
+### Behavior vs cloud mode
+
+- **No Ecobee OAuth or PIN** is used; pairing and credentials are entirely in udi-poly-homekit.
+- Thermostats still appear as **`t…`** nodes; remote room sensors appear as **`rs_…`** children (from hub snapshot/events). **Weather / forecast nodes** from the Ecobee API are **not** created on the HomeKit path.
+- **Controller drivers**: **GV1** reflects hub WebSocket connectivity; **GV3** reflects that the hub reported paired devices. Heartbeats behave like cloud.
+- **Realtime updates** come from hub **event** frames; **QUERY** triggers a **snapshot** read for that device.
+- **Hub metadata characteristics** (accessory information, product data, temperature display units, version, vendor UUIDs, etc.) are classified as *informational*: they are **not copied into IoX drivers** and they **do not** produce **`homekit_unknown_chars`** notices. That only means the plugin does not surface them in PG3 today; they can still matter for Apple/HomeKit or debugging. Temperature display is still driven by **`use_celsius`** in Custom Params, not by HAP Temperature Display Units.
+- HAP characteristics that are truly unknown may still log a warning and accumulate **`homekit_unknown_chars`** (deduplicated by name).
+- The hub may send structured **`warnings`** on the WebSocket **hello `ack`** and **`list_devices`** (see **udi-poly-homekit** `PROTOCOL.md`). This plugin logs each entry and shows them in a PG3 **Notice** named **`homekit_hub_warnings`**. An empty **`warnings`** array clears that notice.
+- If no thermostat node is created from **`list_devices`**, check PG3 **Notice** **`homekit_no_thermostat`** (raw **`devices[]`** snapshot) and hub **`warnings`**; **udi-poly-homekit** must send each row with **`device_id`** and thermostat **category** metadata per **PROTOCOL.md**.
+
+### HomeKit thermostat node (drivers and commands)
+
+HomeKit thermostats use nodedefs **`EcobeeHKC_<id>`** / **`EcobeeHKF_<id>`** (Celsius / Fahrenheit). These are **slimmer** than cloud **`EcobeeC_*`** / **`EcobeeF_*`**: controls that HomeKit does not expose are **omitted** from the node so the PG3 UI matches what the hub can do.
+
+**Why two nodedefs (C vs F) instead of one?** Other nodeservers (e.g. some use a single nodedef with a **`temperature`** editor that defines both UOM 4 and UOM 17 ranges, then set **`uom` per `setDriver`**) can avoid splitting nodes. This plugin keeps **separate C and F thermostat nodedefs** end-to-end—cloud **`EcobeeC_*`** / **`EcobeeF_*`**, HomeKit **`EcobeeHKC_*`** / **`EcobeeHKF_*`**—for **consistency** with the existing profile and docs. Scale is still chosen with **`use_celsius`** in Custom Params (`auto` currently follows the same rules as elsewhere in this codebase, not HAP Temperature Display Units).
+
+**Still present (supported via hub):** **ST**, **CLISPH**, **CLISPC**, **CLIMD**, **CLIFS**, **CLIHUM**, **CLIHCS**, **CLIFRS**, **GV1** (humidification setpoint / target relative humidity), **GV3** (comfort / program: **read** from ``VENDOR_ECOBEE_CURRENT_MODE``; **set** via ``VENDOR_ECOBEE_SET_HOLD_SCHEDULE``). **GV3** and **CLIFS** use the **same IoX values as cloud** (``climateMap`` / **climateList** indices for programs; ``fanMap`` order for fan target: **auto = 0**, **on = 1**). The plugin translates Ecobee HAP vendor comfort bytes (**0 = Home, 1 = Sleep, 2 = Away, 3 = Temp**) and HAP **TargetFanState** (**0 = On, 1 = Auto**) at the hub boundary so existing programs and **CT_*_\<tstat\>*** / **I_TSTAT_FAN_MODE** keep working when you switch between cloud and HomeKit. **BRT** / **DIM** (setpoint step via target temperature where applicable), **QUERY**.
+
+**Removed vs cloud nodedef (not on HomeKit node):** **CLISMD** (hold / schedule mode), **GV4** (fan minimum on time), **GV5** (dehumidification setpoint), **GV6** (Smart Home/Away), **GV7** (Follow Me), **GV8** (connected), **GV9** (weather), **GV10** / **GV11** (backlight), **GV17** (ECO+). Use the Ecobee app or cloud/API path if you need those.
+
+**Hold type (Running / Hold next / Hold indefinite) vs HomeKit GV3:** On **cloud** thermostats, **CLISMD** is *Schedule mode*: Running cancels holds; the two Hold options choose whether the hold lasts until the next scheduled event or indefinitely, and that choice is sent to the Ecobee API (including when you change comfort type with **GV3**). On **HomeKit** thermostats there is **no CLISMD** and **no** IoX driver that reports hold *duration*. **GV3** is only the vendor **comfort / program index** (**read** ``VENDOR_ECOBEE_CURRENT_MODE``; **set** ``VENDOR_ECOBEE_SET_HOLD_SCHEDULE``). After a HomeKit write you can refresh **GV3** to see which program slot the thermostat reports; you **cannot** tell from this nodeserver whether the hold is “until next” or “indefinite”—use the **Ecobee app** or **cloud** backend if you need that distinction.
+
+After upgrading, restart the nodeserver and let the profile refresh (version **4.1.0**+). Existing HomeKit thermostat nodes pick up the new nodedef id on reload.
+
+### Limitations (HomeKit path)
+
+Additional cloud-only behavior may never map 1:1 to HomeKit (schedules, holds, some comfort features). Expect to iterate on firmware and hub protocol as you test.
+
 ## Settings
+
+Applies to **cloud**-mode thermostats (**CLISMD** / Schedule mode). **HomeKit** thermostat nodes do not expose **CLISMD**; see **Hold type (Running / Hold next / Hold indefinite) vs HomeKit GV3** under **HomeKit thermostat node** above.
 
 - The "Schedule Mode" is one of
   1. Running
@@ -68,240 +116,6 @@ When a new release is published, it should be released to the polyglot web store
   1. In the future there will be an upgrade button for major and minor changes, only patch changes will be automatic
 1. If the release has a (Profile Change) then the profile will be updated automatically but if you had the Admin Console open, you will need to close and open it again.
 
+## Changelog
 
-## Release Notes
-- 3.1.5: 11/11/2023
-  - Fix: [Setting Climate Type doesn't set proper hold mode](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues/10)
-- 3.1.4: 08/15/2023
-  - Properly set version
-- 3.1.3: 08/12/2023
-  - Add ability to see and control ECO+
-  - Add node names so they show up in PG3 UI
-- 3.1.2: 07/24/2022
-  - Fix bug caused by changes in previous release.
-- 3.1.1: 07/24/2022
-  - Release: [Feature Request: ecobee Premium air quality sensor](https://github.com/UniversalDevicesInc-PG3/udi-poly-ecobee/issues/4)
-- 3.1.0: 07/23/2022
-  - Beta release of supporting New thermostats with Air Quality
-- 3.0.2: 03/08/2022
-  - Call interface stop when stopping
-- 3.0.1: 03/02/2022
-  - Fix bug caused by change in PG3 interface sending oauth data to nsdata handler.
-- 3.0.0: Jimbo 01/22/2022
-  - Initial PG3 release, not tested from store yet...
-- 2.3.0: JimBo 01/14/2022
-  - Pull in PR from @firstone: Adding set (de)humidity point commands
-- 2.2.3: JimBo 01/01/2021
-  - Fix for Celcius
-- 2.2.2: JimBo 12/31/2020
-  - Different workaround for [Crash getting date/time](https://github.com/Einstein42/udi-ecobee-poly/issues/65)
-    - This is only an issue on Polyglot Cloud
-- 2.2.1: JimBo 12/27/2020
-  - Another fix for [Add support for dryContact sensors](https://github.com/Einstein42/udi-ecobee-poly/issues/24)
-- 2.2.0: JimBo 12/22/2020
-  - Change Authorization to use use new Ecobee UDI Authorization, see __IMPORTANT__ message above!
-    - PGC now uses OAuth so no PIN required
-    - Hopefully this will resolve users having to re-authorize, but only time will tell for sure.
-    - Should fix [The client was authorized, but Ecobee returned an invalid_client error](https://github.com/Einstein42/udi-ecobee-poly/issues/60)
-  - Add traceback for [ClimateType smart14 Error](https://github.com/Einstein42/udi-ecobee-poly/issues/63) to help debug the issue
-    - Also, will only print the error once per run instead of constantly
-  - Fix [Crash getting date/time](https://github.com/Einstein42/udi-ecobee-poly/issues/65)
-  - Initial support for [Add support for dryContact sensors](https://github.com/Einstein42/udi-ecobee-poly/issues/24)
-  - For [ClimateType - smart14](https://github.com/Einstein42/udi-ecobee-poly/issues/63) Only print error once, actually bug will be fixed in the future.
-- 2.1.34: jimBo 11/19/2020
-  - Stop longPoll from running if node start has not completed.  This is a rare case when startup takes a long time due to Polyglot/PBC running very slow
-- 2.1.33: JimBo 11/17/2020
-  - Increased DB write/verify timeout from 15seconds to 15minutes since we have seen issue where retrying a write causes issues
-  - Also, if we see the DB was written, but the date/time is older than what we wrote, then ignore it.
-- 2.1.32: JimBo 11/14/2020
-  - Fix syntax error in last release when token is expired on startup.
-- 2.1.31: JimBo 11/14/2020
-  - Don't force user reauthorization when invalid_grant is returned and token has not expired.  This is to hopefully get around the issue where Ecobee servers return invalid_grant when it's really not.  Ecobee support is no longer responding to us for help on this issue.
-- 2.1.30: JimBo 09/13/2020
-  - Temporary fix for https://github.com/Einstein42/udi-ecobee-poly/issues/60
-    - May have to update after hearing back from Ecobee.
-- 2.1.29: JimBo 09/11/2020
-  - Fix bug introduced in previous version that only affects a new install
-  - Also fix ecobee login url
-- 2.1.28: JimBo 09/09/2020
-  - Change timeout from 60 to 10,61 to see if that stops read timeout issue
-  - Also added connect retries
-- 2.1.27: JimBo 09/07/2020
-  - More fixes for https://github.com/Einstein42/udi-ecobee-poly/issues/57
-    - Clean up DB lock/unlock more
-    - Add retry if save custom data doesn't seem to happen
-    - Set Auth driver to False to trigger programs
-- 2.1.26: JimBo 09/06/2020
-  - Enhance Fix for https://github.com/Einstein42/udi-ecobee-poly/issues/57
-    - Add timeout in saveCustomDataWait method
-- 2.1.25: JimBo 09/04/2020
-  - Enhance Fix for https://github.com/Einstein42/udi-ecobee-poly/issues/57
-    - To workaround possible DB write order issue, do not continue until DB data is confirmed to be saved when locking/unlocking
-- 2.1.24: JimBo 08/30/2020
-  - Fix for https://github.com/Einstein42/udi-ecobee-poly/issues/57
-- 2.1.23: JImBo 06/06/2020
-  - Fix to not set auth status False when starting refresh
-- 2.1.22: JimBo 06/05/2020
-  - Refresh token before it expires,
-  - Don't save tokenData in customData because it will increase PGC cost.
-- 2.1.21: JimBo 06/04/2020
-  - Fix crash for another authentication issue.
-- 2.1.20: JimBo 06/03/2020
-  - Print msg to log when requesting a pin in case it doesn't show up in Polyglot UI
-  - Print customData on restart
-  - Store current nodeserver version in customData for reference
-  - Increase waitingOnPin sleep time to 30 and increment by 30 on each loop up to 180
-- 2.1.19: JimBo 05/26/2020
-  - Fix another crash when Ecobee servers are not responding
-- 2.1.18: JimBo 05/07/20202
-  - When refresh_token goes missing, force a reAuth.  No idea how that happens, but we can track it now.
-- 2.1.17: JimBo 05/07/2020
-  - Keep track of old tokenData when it becomes invalid, along with the reason in the DB.
-- 2.1.16: JimBo 03/17/2020
-  - Fix for https://github.com/Einstein42/udi-ecobee-poly/issues/52
-- 2.1.15: JimBo 02/06/2020
-  - Add fix for https://github.com/Einstein42/udi-ecobee-poly/issues/51 not fully tested since I can't repeat, but should trap the error.
-- 2.1.14: JimBo 02/02/2020
-  - Add Support for auxHeat https://github.com/Einstein42/udi-ecobee-poly/issues/50
-  - profile update required, must restart AC after retarting Nodeserver
-- 2.1.13: JimBo 09/09/2019
-  - Fix issue with new installs where profile/nls didn't exist on initial start
-- 2.1.12: JimBo 09/08/2019
-  - Added simple fix for [ClimateType of 'wakeup' not found, halts further processing](https://github.com/Einstein42/udi-ecobee-poly/issues/46)
-  - Proper fix is defered for later [climateList should be pulled from API](https://github.com/Einstein42/udi-ecobee-poly/issues/47)
-  - New profile will be generated on restart, make sure to close and re-open admin console
-- 2.1.11: JimBo 06/19/2019
-  - Better trapping for expired tokens
-- 2.1.10: JimBo 05/09/2019
-  - Ignore socket not closed warnings (hopefully for @larryllix)
-- 2.1.9: JimBo 05/05/2019
-  - Fixed backlightSleepIntensity
-- 2.1.8: JimBo 04/23/2019
-  - Add backlightSleepIntensity
-- 2.1.7: JimBo 04/22/2019
-  - Add Upload Profile to Controller, should never be needed, but just in case.
-- 2.1.6: JimBo
-  - [Crash due to bad json returned from Ecobee](https://github.com/Einstein42/udi-ecobee-poly/issues/45)
-- 2.1.5: JimBo
-  - [Crash due to bad json returned from Ecobee](https://github.com/Einstein42/udi-ecobee-poly/issues/45)
-  - [Not properly recognizing expired token response?](https://github.com/Einstein42/udi-ecobee-poly/issues/44)
-  - [Track Vacation along with Smart Home/Away](https://github.com/Einstein42/udi-ecobee-poly/issues/31)
-    - Properly support Vacation, SmartAway, SmartHome and DemandResponse Events in 'Climate Type'
-  - [Support changing backlightOnIntensity](https://github.com/Einstein42/udi-ecobee-poly/issues/42)
-- 2.1.4: JimBo
-  - [Crash due to bad json returned from Ecobee](https://github.com/Einstein42/udi-ecobee-poly/issues/45)
-- 2.1.3: JimBo
-  - More fixing flakey Ecobee servers.
-- 2.1.2: JimBo
-  - Fix re-authorization, but can not completely verify because Ecobee site is flakey.
-- 2.1.1: JimBo
-  - [Add setting to include/exclude weather and forcast](https://github.com/Einstein42/udi-ecobee-poly/issues/40)
-- 2.1.0: JimBo
-  - Changed communcation with Ecobee to use sessions.  This has fixed the hanging issue and made network connections to Ecobee servers more robust.
-  - Added logger level to controller which defaults to warning, however polyglot doesn't udpate the DB so it's not changeable from the ISY until this magically happens, not sure when.
-- 2.0.39: JimBo
-  - Add more debugging to see where hang is happening
-- 2.0.38: JimBo
-  - Fixed typo when initial discover fails.
-- 2.0.37: JimBo
-  - Trap any error in discover in case Ecobee servers are not responding when starting up, and we hit an error that is not being trapped.
-- 2.0.36: JimBo
-  - [Trap: ConnectionResetError: [Errno 104] Connection reset by peer](https://github.com/Einstein42/udi-ecobee-poly/issues/39)
-- 2.0.35: JimBo
-  - Fix initialization of "Ecobee Connection Status".  Try to set it to False on exit, but doesn't work due to polyglot issue.
-  - Add debug in getThermostatSelection to see where it's hanging
-- 2.0.34: JimBo
-  - [AttributeError: 'Controller' object has no attribute 'revData'](https://github.com/Einstein42/udi-ecobee-poly/issues/36)
-  - Send Heartbeat on startup
-- 2.0.33: JimBo
-  - Fix another crash from Ecobee server returning bad json data.
-- 2.0.32: JimBo
-  - [Fix issue with unknown remote sensor temperature](https://github.com/Einstein42/udi-ecobee-poly/issues/35)
-  - [AttributeError: 'Controller' object has no attribute 'revData'](https://github.com/Einstein42/udi-ecobee-poly/issues/36)
-  - [Thermostat connected not updated when service is down](https://github.com/Einstein42/udi-ecobee-poly/issues/37)
-- 2.0.31: JimBo
-  - Add Poll on controller to grab all current settings, and query to just report the currently known drivers values to the isy.
-  - Fix another issue found when Ecobee servers are not responding.
-- 2.0.30: JimBo
-  - Fix for Hold Type names in Climate Control program action.  Although, they don't actually work yet in Polyglot, so you have to set Hold Type in another Action.
-- 2.0.29: JimBo
-  - Added back fix for checking sensors from 2.0.26 that git merge decided to get rid of.
-- 2.0.28: JimBo
-  - Added vacation mode tracking as a Climate Type for [Track Vacation along with Smart Home/Away](https://github.com/Einstein42/udi-ecobee-poly/issues/31)
-- 2.0.27: JimBo
-  - [Issue with custom climate names](https://github.com/Einstein42/udi-ecobee-poly/issues/32)
-- 2.0.26: JimBo
-  - Changed logic for adding sensors and checking sensor updates, so we know if there is a problem with sensor not found
-- 2.0.25: JimBo
-  - Build the profile before adding any nodes, shouldn't make any difference, but is just the right thing to do.
-- 2.0.24: JimBo
-  - Set Fan State on when manually turned on and off when Climate Type = Resume, will get updated on next long poll if not the actual status.
-- 2.0.23: JimBo
-  - [Add heartbeat](https://github.com/Einstein42/udi-ecobee-poly/issues/29)
-    - See https://forum.universal-devices.com/topic/25016-polyglot-nodeserver-monitoring/ for info on how to use it.
-- 2.0.22: JimBo
-  - [Ecobee server issues caused nodeserver to hang](https://github.com/Einstein42/udi-ecobee-poly/issues/28)
-    - More trapping
-  - [Set Fan driver on/off based on heat setting when fanControlRequired setting](https://github.com/Einstein42/udi-ecobee-poly/issues/25)
-    - Should actually work this time.
-- 2.0.21: JimBo
-  - [Ecobee server issues caused nodeserver to hang](https://github.com/Einstein42/udi-ecobee-poly/issues/28)
-    - Not a sure fix, but should improve stablity.
-  - [Add control of fan on/auto state](https://github.com/Einstein42/udi-ecobee-poly/issues/23)
-  - [Set Fan driver on/off based on heat setting when fanControlRequired setting](https://github.com/Einstein42/udi-ecobee-poly/issues/25)
-- 2.0.20: JimBo
-  - Fix for old Ecobee's that don't have the same sensor data.
-- 2.0.19: JimBo
-  - Fix bug when installing
-- 2.0.18: JimBo
-  - Support sensors with or without Humidity
-  - Fix Sensor update to not report drivers on every check.  Will reduce a lot of updates to ISY.
-- 2.0.17: JimBo
-  - Add Connected to Thermostat, set to False when Ecobee servers can't see the Thermostat
-  - Fix crash where Sensor temp was 'unknown' when it hasn't reported yet
-  - Fix bug where profile is not rebuilt when a climate name is Changed
-  - If an invalid climate type is somehow selected, meaning it isn't named in the app, then smart<n> is shown.  I can't figure out how this can happen, but seems possible.
-- 2.0.16: JimBo
-  - Fix issues with custom climate types for mutliple thermostats
-- 2.0.15: JimBo
-  - [Add support for custom named climate type's](https://github.com/Einstein42/udi-ecobee-poly/issues/1)
-    - With this change the custom Climate Types (Comfort Settings) names you have created in the thermostat will show up on the ISY, but this means that during discover it will build custom profiles that will be loaded and will require the admin console to be closed if it's open.
-- 2.0.14: JimBo
-  - [When I select hold-indefinite on schedule mode, it sets the heat setpoint to 26 degrees C and holds it there indefinitely.](https://github.com/Einstein42/udi-ecobee-poly/issues/16)
-  - [Temperature is being displayed in the console in deg F (even though it says deg C)](https://github.com/Einstein42/udi-ecobee-poly/issues/17)
-  - [The Occupancy variable does change for the the satellite sensors, but not for the thermostats itself.](https://github.com/Einstein42/udi-ecobee-poly/issues/18)
-    - Also added Humidity support to sensors, which will show up after restarting the nodeserver and restarting admin console.
-- 2.0.13: JimBo
-  - Reorganize hold functions for changing setpoints, climate type, ...
-  - Fix Illegal node names
-  - More trapping of bad return data from Ecobee servers
-  - More debugging info to find issues
-- 2.0.12: JimBo
-  - Fix for polling not working
-  - Many changes to how hold's are handled, should be more reliable
-- 2.0.11: JimBo
-  - Thermostat address starts with 't', existing users will need to delete the old node after fixing their programs to reference the new one.
-- 2.0.10: JimBo
-  - Changed setpoint up/down (BRT/DIM) to change as a hold nextTransition instead of changing the program setpoint
-  - Better trapping of issues when Ecobee servers are not responding
-- 2.0.9: JimBo
-  - Should now be properly tracking all status when going in and out of holds.
-- 2.0.8: JimBo
-  - Shortend names of Sensor, Weather, and Forcast nodes.
-    - Existing users will have to delete the current nodes in the Polyglot UI to get the new names, or just rename them yourself.
-- 2.0.7: JimBo
-  - [Changing setpoint when program running changes the actual "comfort setting"](https://github.com/Einstein42/udi-ecobee-poly/issues/6)
-    - See Notes above in Settings for "Schedule Mode"
-  - [Schedule Mode crash ValueError: invalid literal for int() with base 10](https://github.com/Einstein42/udi-ecobee-poly/issues/10)
-  - [Setting 'Climate Type' sets hold as indefinite, should it use nextTransition?](https://github.com/Einstein42/udi-ecobee-poly/issues/9)
-    - It will now use the current set "Schedule Mode"
-  - [Move creating Thermostat child nodes into Thermostat](https://github.com/Einstein42/udi-ecobee-poly/issues/7)
-  - [Sensor ID's are not unique when you have multiple thermostats](https://github.com/Einstein42/udi-ecobee-poly/issues/2)
-    - The new sensor nodes will be created when the nodeserver is restarted.
-    - IMPORTANT: Please delete the nodes from within the Polyglot UI after changing any programs that may reference the old ones.
-- 2.0.6: JimBo
-  - [Fix lookup for setting Mode](https://github.com/Einstein42/udi-ecobee-poly/issues/4)
-  - [Fix crash when changing schedule mode](https://github.com/Einstein42/udi-ecobee-poly/issues/5)
-  - Fix "Climate Type" initialization when there is a manual change
-  - Automatically upload new profile when it is out of date.
-  - Change current temp for F to include one signficant digit, since that's what is sent.
+Version history is in **[CHANGELOG.md](CHANGELOG.md)** in this repository.

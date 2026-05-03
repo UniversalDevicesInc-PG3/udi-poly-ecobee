@@ -4,7 +4,8 @@ from udi_interface import Node,LOGGER
 from copy import deepcopy
 import json
 from node_funcs import *
-from nodes import Sensor, Weather
+from .Sensor import Sensor
+from .Weather import Weather
 from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driversMap,ecoMap
 
 
