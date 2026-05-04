@@ -59,9 +59,11 @@ ecoMap = {
 
 driversMap = {
   'ECO_CTR': [
-    { 'driver': 'ST', 'value': 0, 'uom': '25', 'name': 'Controller Status' },
-    { 'driver': 'GV1', 'value': 0, 'uom': '2', 'name': 'Ecobee / Hub Connection' },
+    { 'driver': 'ST', 'value': 1, 'uom': '25', 'name': 'Controller Status' },
+    { 'driver': 'GV1', 'value': 0, 'uom': '2', 'name': 'HomeKit hub connected' },
     { 'driver': 'GV3', 'value': 0, 'uom': '2', 'name': 'Authorized / Paired' },
+    { 'driver': 'GV4', 'value': 0, 'uom': '25', 'name': 'HomeKit WebSocket' },
+    { 'driver': 'GV5', 'value': 0, 'uom': '25', 'name': 'HomeKit MQTT' },
   ],
   'EcobeeF': [
     { 'driver': 'ST',     'value': 0,  'uom': '17', 'name': 'Temperature' },

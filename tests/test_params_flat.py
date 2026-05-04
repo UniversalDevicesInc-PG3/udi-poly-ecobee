@@ -6,6 +6,7 @@ import pytest
 
 from params_flat import (
     DEFAULT_EFFECTIVE,
+    DEFAULT_HK_MQTT_CLIENT_SLUG,
     default_backend_for_new_param_seed,
     format_param_notice_html,
     normalize_flat_params,
@@ -16,8 +17,37 @@ def test_defaults_when_empty_raw():
     out, errs = normalize_flat_params({})
     assert errs == []
     assert out['backend'] == 'homekit'
+    assert out['hk_transport'] == 'websocket'
     assert out['hk_ws_url'] == DEFAULT_EFFECTIVE['hk_ws_url']
+    assert out['hk_mqtt_client_slug'] == DEFAULT_HK_MQTT_CLIENT_SLUG == DEFAULT_EFFECTIVE['hk_mqtt_client_slug']
     assert out['dry_run'] == 'true'
+
+
+def test_mqtt_transport_preserved_slugs():
+    out, errs = normalize_flat_params(
+        {
+            'hk_transport': 'mqtt',
+            'hk_mqtt_hub_slug': 'hub1',
+            'hk_mqtt_client_slug': 'my-client',
+        }
+    )
+    assert errs == []
+    assert out['hk_transport'] == 'mqtt'
+    assert out['hk_mqtt_hub_slug'] == 'hub1'
+    assert out['hk_mqtt_client_slug'] == 'my-client'
+
+
+def test_mqtt_invalid_client_slug_falls_back():
+    prev = {**DEFAULT_EFFECTIVE, 'hk_mqtt_client_slug': 'my-plugin-ns'}
+    out, errs = normalize_flat_params({'hk_mqtt_client_slug': 'bad slug!'}, prev)
+    assert errs
+    assert out['hk_mqtt_client_slug'] == 'my-plugin-ns'
+
+
+def test_ws_url_not_validated_when_mqtt_transport():
+    out, errs = normalize_flat_params({'hk_transport': 'mqtt', 'hk_ws_url': 'http://nope'})
+    assert errs == []
+    assert out['hk_ws_url'] == 'http://nope'
 
 
 def test_backend_seed_fresh_install_homekit():

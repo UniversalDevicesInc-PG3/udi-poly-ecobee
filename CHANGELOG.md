@@ -5,12 +5,25 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [4.0.1] - 2026-05-03
+
+### Changed
+
+- **MQTT default `hk_mqtt_client_slug`:** defaults to this plugin’s PG3 id **`udi-poly-ecobee`** (`DEFAULT_HK_MQTT_CLIENT_SLUG` in `params_flat.py`); override when multiple clients share one broker and need distinct topic slugs.
+
+### Fixed
+
+- **Controller GV4/GV5 (HomeKit transport status):** merge Polyglot `CONFIG` driver rows into the full **`ECO_CTR`** template from **`const.driversMap`** instead of replacing in-memory drivers with only PG3’s subset. Prevents **`setDriver('GV4'|'GV5')`** *Invalid driver* when IoX has not yet persisted new hub-transport status drivers, so WebSocket/MQTT tri-state updates correctly.
+
 ## [4.0.0] - 2026-05-02
 
 Major release: **HomeKit hub integration** with [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) is the supported path for new installs; Ecobee cloud/API remains for legacy deployments only.
 
 ### Added
 
+- **HomeKit hub MQTT client** — optional Custom Param **`hk_transport`** = **`mqtt`** with **`hk_mqtt_*`** broker and topic slugs (**`HubMqttClient`**, **aiomqtt**); same JSON protocol as WebSocket when udi-poly-homekit has **`mqtt_enable`** (see udi-poly-homekit **`PROTOCOL.md`**).
 - **HomeKit backend** — WebSocket client to the udi-poly-homekit hub (hello `ack` pairing list, multiplexed `command` / `snapshot` / `get` RPC, hub `warnings` mirrored to PG3 Notices).
 - **PG3 Notice `homekit_hub_unreachable`** — when the hub WebSocket fails (connection or hello), with guidance to install and configure udi-poly-homekit and set `hk_ws_url` / `hk_ws_token`.
 - **`default_backend_for_new_param_seed`** — when Custom Param `backend` is missing, seed **`homekit`** for a fresh nodeserver and **`cloud`** when OAuth, non-empty `api_key`, Ecobee `tokenData` / PIN in customdata, or existing non-controller nodes indicate a legacy cloud install.

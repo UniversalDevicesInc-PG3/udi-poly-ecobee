@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from udi_interface import LOG_HANDLER, LOGGER
 
-from homekit_client import HubWebSocketClient
+from homekit_client import HubMqttClient, HubWebSocketClient
 from homekit_client.hap_apply import hap_name_vendor_ecobee_current_mode, is_ecobee_current_mode_characteristic
 from homekit_client.char_map import (
     CharBucket,
@@ -33,6 +33,7 @@ from homekit_client.profile_writer import (
     write_ecobee_climate_profile,
 )
 from node_funcs import climateList, customdata_load_payload, customdata_user_snapshot, get_profile_info, get_valid_node_name
+from params_flat import DEFAULT_EFFECTIVE
 
 from .Sensor import HomeKitSensor
 from .Thermostat import HomeKitThermostat
@@ -53,6 +54,26 @@ _THERM_SNAPSHOT_REFRESH_UUID_NORM = frozenset(
     if x
 )
 
+# IoX controller **GV4** (WebSocket) / **GV5** (MQTT), UOM 25 index (same labels as udi-poly-homekit hub **GV1**).
+_HK_PATH_UNUSED = 0
+_HK_PATH_NOT_CONNECTED = 1
+_HK_PATH_CONNECTED = 2
+
+_HK_TRANSPORT_RESTART_KEYS: Tuple[str, ...] = (
+    'hk_transport',
+    'hk_ws_url',
+    'hk_ws_token',
+    'hk_mqtt_host',
+    'hk_mqtt_port',
+    'hk_mqtt_username',
+    'hk_mqtt_password',
+    'hk_mqtt_hub_slug',
+    'hk_mqtt_client_slug',
+)
+
+# Avoid flooding PG3 Notices when the hub client drops and reconnects in a tight loop.
+_HK_DISCONNECT_NOTICE_DEBOUNCE_SEC = 45.0
+
 
 class HomeKitBackend:
     """Runs against :class:`nodes.Controller` (dispatcher) for IoX node lifecycle."""
@@ -68,7 +89,7 @@ class HomeKitBackend:
         self.TypedData = dispatcher.TypedData
         self.hb = 0
         self.ready = False
-        self._ws: Optional[HubWebSocketClient] = None
+        self._ws: Optional[HubWebSocketClient | HubMqttClient] = None
         self.handler_config_st = None
         self.handler_config_done_st = None
         self.handler_params_st = None
@@ -86,6 +107,35 @@ class HomeKitBackend:
         # Skip redundant full snapshot after duplicate ``list_devices`` / hello ``devices[]`` (same topology).
         self._list_devices_topology_fp: Optional[str] = None
         self._list_devices_force_snapshot_resync: bool = False
+        self._hk_suppress_transport_callbacks: bool = False
+        self._hk_last_transport_snap: Optional[Dict[str, str]] = None
+        self._hk_last_disconnect_notice_monotonic: float = 0.0
+
+    def _pg3_warn_and_notice(
+        self,
+        notice_key: str,
+        *,
+        title: str,
+        log_message: str,
+        notice_html: str,
+        emit_notice: bool = True,
+    ) -> None:
+        """Log **WARNING** and optionally set a PG3 **Notice** (HTML body is concatenated after the title).
+
+        Same pattern as **udi-poly-homekit** ``nodes.Controller._pg3_warn_and_notice`` (duplicated on purpose so
+        each Node Server stays self-contained—no cross-package coupling).
+        """
+        LOGGER.warning('%s', log_message)
+        if not emit_notice:
+            return
+        try:
+            self.Notices[notice_key] = (
+                f'<p><b>{html.escape(title)}</b></p>'
+                f'{notice_html}'
+                '<p>See the Node Server log for details.</p>'
+            )
+        except Exception:
+            LOGGER.exception('HomeKit: failed to set PG3 Notice %r', notice_key)
 
     def _plugin_root(self) -> Path:
         return Path(__file__).resolve().parent.parent.parent.parent
@@ -107,12 +157,41 @@ class HomeKitBackend:
         return anode
 
     def close(self) -> None:
-        self._cancel_all_thermostat_snapshot_timers()
-        self._list_devices_topology_fp = None
-        self._list_devices_force_snapshot_resync = False
-        if self._ws is not None:
-            self._ws.stop()
-            self._ws = None
+        self._hk_suppress_transport_callbacks = True
+        try:
+            self._cancel_all_thermostat_snapshot_timers()
+            self._list_devices_topology_fp = None
+            self._list_devices_force_snapshot_resync = False
+            if self._ws is not None:
+                self._ws.stop()
+                self._ws = None
+        finally:
+            self._hk_suppress_transport_callbacks = False
+
+    def _hk_transport_snap(self) -> Dict[str, str]:
+        p = self.dispatcher.effective_params
+        return {k: str(p.get(k, '') or '') for k in _HK_TRANSPORT_RESTART_KEYS}
+
+    def _set_hk_ws_path_driver(self, code: int) -> None:
+        try:
+            self.dispatcher.setDriver('GV4', int(code), uom=25, report=True, force=True)
+        except Exception:
+            LOGGER.exception('setDriver GV4 (HomeKit WebSocket path) failed')
+
+    def _set_hk_mqtt_path_driver(self, code: int) -> None:
+        try:
+            self.dispatcher.setDriver('GV5', int(code), uom=25, report=True, force=True)
+        except Exception:
+            LOGGER.exception('setDriver GV5 (HomeKit MQTT path) failed')
+
+    def _prime_hk_path_drivers_for_transport(self, tr: str) -> None:
+        """Inactive path = **0**, active path = **1** (connecting) before the client thread starts."""
+        if tr == 'mqtt':
+            self._set_hk_ws_path_driver(_HK_PATH_UNUSED)
+            self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
+        else:
+            self._set_hk_mqtt_path_driver(_HK_PATH_UNUSED)
+            self._set_hk_ws_path_driver(_HK_PATH_NOT_CONNECTED)
 
     def handler_config(self, cfg_data):
         LOGGER.info('hk cfg_data=%s', cfg_data)
@@ -129,6 +208,18 @@ class HomeKitBackend:
         LOGGER.debug('hk handler_params')
         self.Params.load(params)
         self.handler_params_st = True
+        new_snap = self._hk_transport_snap()
+        prev = self._hk_last_transport_snap
+        if self.ready and prev is not None and new_snap != prev:
+            changed = sorted(k for k in new_snap if new_snap.get(k) != prev.get(k))
+            LOGGER.info(
+                'HomeKit hub transport or broker/WS settings changed (%s); restarting client (%s)',
+                ', '.join(changed) if changed else 'keys',
+                str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower(),
+            )
+            self._start_ws()
+        else:
+            self._hk_last_transport_snap = new_snap
 
     def sync_param_notices(self) -> None:
         """Refresh HomeKit notices that depend on flat params (e.g. dry_run)."""
@@ -197,27 +288,70 @@ class HomeKitBackend:
             LOGGER.error('HomeKit backend: timed out waiting for PG3 startup handlers')
         self.dispatcher.setDriver('GV1', 0)
         self.dispatcher.setDriver('GV3', 0)
+        try:
+            self.dispatcher.setDriver('GV4', _HK_PATH_UNUSED, uom=25, report=True, force=True)
+            self.dispatcher.setDriver('GV5', _HK_PATH_UNUSED, uom=25, report=True, force=True)
+        except Exception:
+            LOGGER.exception('setDriver GV4/GV5 at HomeKit backend start')
         self.sync_param_notices()
         self._start_ws()
         self.ready = True
 
     def _start_ws(self) -> None:
         p = self.dispatcher.effective_params
-        url = p.get('hk_ws_url', 'ws://127.0.0.1:8163')
-        token = p.get('hk_ws_token', '') or ''
+        tr = str(p.get('hk_transport', 'websocket')).strip().lower()
+        self._prime_hk_path_drivers_for_transport(tr)
         self.close()
-        self._ws = HubWebSocketClient(
-            url,
-            token,
-            on_event=self._on_hap_event,
-            on_list_devices=self._on_list_devices,
-            on_warnings=self._on_hub_warnings,
-            on_connected=self._on_ws_connected,
-            on_disconnected=self._on_ws_disconnected,
-            on_transport_error=self._on_ws_transport_error,
-            logger=LOGGER,
-        )
+        if tr == 'mqtt':
+            try:
+                port = int(str(p.get('hk_mqtt_port') or DEFAULT_EFFECTIVE['hk_mqtt_port']).strip())
+            except (TypeError, ValueError):
+                port = int(DEFAULT_EFFECTIVE['hk_mqtt_port'])
+            mqtt_client_slug = str(
+                p.get('hk_mqtt_client_slug') or DEFAULT_EFFECTIVE['hk_mqtt_client_slug']
+            ).strip()
+            host = str(p.get('hk_mqtt_host') or DEFAULT_EFFECTIVE.get('hk_mqtt_host') or 'localhost').strip() or 'localhost'
+            hub_slug = str(p.get('hk_mqtt_hub_slug') or 'default').strip() or 'default'
+            LOGGER.info(
+                'HomeKit hub: starting MQTT client %s:%s hub_slug=%r client_slug=%r',
+                host,
+                port,
+                hub_slug,
+                mqtt_client_slug,
+            )
+            self._ws = HubMqttClient(
+                host,
+                port,
+                hub_slug=hub_slug,
+                client_slug=mqtt_client_slug,
+                username=str(p.get('hk_mqtt_username') or ''),
+                password=str(p.get('hk_mqtt_password') or ''),
+                client_id=mqtt_client_slug,
+                on_event=self._on_hap_event,
+                on_list_devices=self._on_list_devices,
+                on_warnings=self._on_hub_warnings,
+                on_connected=self._on_ws_connected,
+                on_disconnected=self._on_ws_disconnected,
+                on_transport_error=self._on_ws_transport_error,
+                logger=LOGGER,
+            )
+        else:
+            url = p.get('hk_ws_url', 'ws://127.0.0.1:8163')
+            token = p.get('hk_ws_token', '') or ''
+            LOGGER.info('HomeKit hub: starting WebSocket client %r', url)
+            self._ws = HubWebSocketClient(
+                url,
+                token,
+                on_event=self._on_hap_event,
+                on_list_devices=self._on_list_devices,
+                on_warnings=self._on_hub_warnings,
+                on_connected=self._on_ws_connected,
+                on_disconnected=self._on_ws_disconnected,
+                on_transport_error=self._on_ws_transport_error,
+                logger=LOGGER,
+            )
         self._ws.start()
+        self._hk_last_transport_snap = self._hk_transport_snap()
 
     def _on_hub_warnings(self, warnings: List[Dict[str, Any]]) -> None:
         """
@@ -264,28 +398,91 @@ class HomeKitBackend:
         )
 
     def _on_ws_connected(self) -> None:
+        if self._hk_suppress_transport_callbacks:
+            return
         self.dispatcher.setDriver('GV1', 1)
-        try:
-            self.Notices.delete('homekit_hub_unreachable')
-        except Exception:
-            LOGGER.debug('delete homekit_hub_unreachable failed', exc_info=True)
+        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        if tr == 'mqtt':
+            self._set_hk_ws_path_driver(_HK_PATH_UNUSED)
+            self._set_hk_mqtt_path_driver(_HK_PATH_CONNECTED)
+        else:
+            self._set_hk_ws_path_driver(_HK_PATH_CONNECTED)
+            self._set_hk_mqtt_path_driver(_HK_PATH_UNUSED)
+        LOGGER.info('HomeKit hub: hello OK (%s transport)', tr)
+        for nk in ('homekit_hub_unreachable', 'homekit_hub_disconnected'):
+            try:
+                self.Notices.delete(nk)
+            except Exception:
+                LOGGER.debug('delete %s failed', nk, exc_info=True)
         # Pairing list is applied from hello ``ack`` ``devices[]`` in ``HubWebSocketClient`` (no bootstrap
         # ``list_devices`` on the hub). Proactive hub ``list_devices`` after pair/unpair still arrives here.
 
     def _on_ws_transport_error(self, message: str) -> None:
-        """Hub WebSocket connect/hello failure (refused, TLS, invalid token, etc.)."""
+        """Hub transport connect/hello failure (WebSocket or MQTT)."""
+        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        if not self._hk_suppress_transport_callbacks:
+            if tr == 'mqtt':
+                self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
+            else:
+                self._set_hk_ws_path_driver(_HK_PATH_NOT_CONNECTED)
         detail = html.escape(str(message or 'connection failed'))
-        self.Notices['homekit_hub_unreachable'] = (
-            '<p><b>HomeKit hub WebSocket failed</b> — '
-            f'<code>{detail}</code></p>'
-            '<p>Install and configure <b>udi-poly-homekit</b> in Polyglot, pair your Ecobee(s), enable the '
-            'hub WebSocket (<code>ws_host</code> / <code>ws_port</code>), then set this nodeserver '
-            'Custom Params <code>hk_ws_url</code> (and <code>hk_ws_token</code> if the hub requires it). '
-            'See <b>README.md</b> and <b>CONFIG.md</b>.</p>'
-        )
+        log_line = f'HomeKit hub transport error ({tr}): {message}'
+        if tr == 'mqtt':
+            self._pg3_warn_and_notice(
+                'homekit_hub_unreachable',
+                title='HomeKit hub MQTT failed',
+                log_message=log_line,
+                notice_html=(
+                    f'<p><code>{detail}</code></p>'
+                    '<p>Install and configure <b>udi-poly-homekit</b> with <code>mqtt_enable=true</code> and a LAN '
+                    'broker, then set this Node Server <code>hk_transport</code> to <code>mqtt</code> and match '
+                    '<code>hk_mqtt_*</code> Custom Params to the hub (<code>hk_mqtt_hub_slug</code> must match the '
+                    'hub, <code>hk_mqtt_client_slug</code> must match the MQTT topic segment). See <b>README.md</b> '
+                    'and <b>udi-poly-homekit</b> <b>PROTOCOL.md</b>.</p>'
+                ),
+            )
+        else:
+            self._pg3_warn_and_notice(
+                'homekit_hub_unreachable',
+                title='HomeKit hub WebSocket failed',
+                log_message=log_line,
+                notice_html=(
+                    f'<p><code>{detail}</code></p>'
+                    '<p>Install and configure <b>udi-poly-homekit</b> in Polyglot, pair your Ecobee(s), enable the '
+                    'hub WebSocket (<code>ws_host</code> / <code>ws_port</code>), then set this Node Server '
+                    'Custom Params <code>hk_ws_url</code> (and <code>hk_ws_token</code> if the hub requires it). '
+                    'See <b>README.md</b> and <b>CONFIG.md</b>.</p>'
+                ),
+            )
 
     def _on_ws_disconnected(self) -> None:
+        if self._hk_suppress_transport_callbacks:
+            return
         self.dispatcher.setDriver('GV1', 0)
+        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        if tr == 'mqtt':
+            self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
+        else:
+            self._set_hk_ws_path_driver(_HK_PATH_NOT_CONNECTED)
+        label = 'MQTT' if tr == 'mqtt' else 'WebSocket'
+        log_line = (
+            f'HomeKit hub {label} transport disconnected; the client will retry if the hub or broker is reachable.'
+        )
+        now = time.monotonic()
+        if now - self._hk_last_disconnect_notice_monotonic >= _HK_DISCONNECT_NOTICE_DEBOUNCE_SEC:
+            self._hk_last_disconnect_notice_monotonic = now
+            self._pg3_warn_and_notice(
+                'homekit_hub_disconnected',
+                title=f'HomeKit hub {label} disconnected',
+                log_message=log_line,
+                notice_html=(
+                    '<p>The hub client lost its session (network flap, hub restart, or broker drop). '
+                    'If this keeps appearing, verify <b>udi-poly-homekit</b> is running, '
+                    '<code>hk_transport</code> matches the hub, and broker ACLs allow this client.</p>'
+                ),
+            )
+        else:
+            LOGGER.warning('%s (PG3 Notice deduped for %.0fs)', log_line, _HK_DISCONNECT_NOTICE_DEBOUNCE_SEC)
 
     def _typed_list(self, key: str) -> List[Dict[str, Any]]:
         try:
@@ -1238,6 +1435,11 @@ class HomeKitBackend:
         self._sensor_by_key.clear()
         self._motion_sensor_by_device.clear()
         self.dispatcher.setDriver('GV1', 0)
+        try:
+            self.dispatcher.setDriver('GV4', _HK_PATH_UNUSED, uom=25, report=True, force=True)
+            self.dispatcher.setDriver('GV5', _HK_PATH_UNUSED, uom=25, report=True, force=True)
+        except Exception:
+            LOGGER.exception('setDriver GV4/GV5 on HomeKit backend stop')
         self.poly.stop()
 
     def cmd_poll(self, *args, **kwargs):

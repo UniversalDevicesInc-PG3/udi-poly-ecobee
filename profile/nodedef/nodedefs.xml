@@ -5,6 +5,8 @@
       <st id="ST" editor="cst" />
       <st id="GV1" editor="BOOL" />
       <st id="GV3" editor="BOOL" />
+      <st id="GV4" editor="hktr" />
+      <st id="GV5" editor="hktr" />
     </sts>
     <cmds>
       <sends>

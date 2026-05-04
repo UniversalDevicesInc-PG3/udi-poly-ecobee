@@ -36,6 +36,39 @@ class Controller(Node):
         'POLL': 'cmd_poll',
     }
 
+    def updateDrivers(self, drivers):
+        """Merge PG3 ``drivers`` into the full ``ECO_CTR`` template from :mod:`const`.
+
+        On CONFIG, ``udi_interface`` replaces ``self.drivers`` with the list from
+        Polyglot's database. After a profile upgrade (new GV4/GV5 on the controller),
+        that list can still omit drivers IoX has not persisted yet, which makes
+        ``setDriver('GV4'|'GV5')`` fail with *Invalid driver* and leaves transport
+        status stuck at *Not in use*. Merging keeps template drivers and overlays
+        stored values/uoms for keys PG3 does know about.
+        """
+        if not isinstance(drivers, list):
+            super().updateDrivers(drivers)
+            return
+        merged = deepcopy(driversMap['ECO_CTR'])
+        by_id = {d['driver']: d for d in merged}
+        for row in drivers:
+            key = row.get('driver')
+            if not key or key not in by_id:
+                continue
+            tgt = by_id[key]
+            if 'value' in row:
+                tgt['value'] = row['value']
+            if row.get('uom') is not None:
+                tgt['uom'] = str(row['uom'])
+        self.drivers = merged
+        if len(drivers) < len(merged):
+            LOGGER.debug(
+                'Controller: merged %s PG3 driver row(s) into ECO_CTR template (%s); '
+                'IoX profile sync will add missing keys to the database over time.',
+                len(drivers),
+                len(merged),
+            )
+
     def __init__(self, poly, primary, address, name):
         self.Notices = Custom(poly, 'notices')
         self.Data = Custom(poly, 'customdata')

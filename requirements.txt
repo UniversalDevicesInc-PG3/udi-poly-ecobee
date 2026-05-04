@@ -1,4 +1,5 @@
 requests
 udi_interface>=3.0.31
 websockets>=12.0
+aiomqtt>=2.0.0
 markdown2
