@@ -16,6 +16,7 @@ from websockets.client import WebSocketClientProtocol
 PROTOCOL_VERSION = '1'
 
 BackoffSchedule = (1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
+DEFAULT_COMMAND_RPC_TIMEOUT_SEC = 30.0
 
 
 def _norm_rpc_id(value: Any) -> Optional[str]:
@@ -120,7 +121,7 @@ class HubWebSocketClient:
         device_id: str,
         characteristic: str,
         value: Any,
-        timeout: float = 30.0,
+        timeout: float = DEFAULT_COMMAND_RPC_TIMEOUT_SEC,
     ) -> bool:
         if not self.wait_hello(timeout):
             raise TimeoutError('HomeKit hub hello timeout')

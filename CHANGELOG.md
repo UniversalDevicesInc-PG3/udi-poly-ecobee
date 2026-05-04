@@ -7,6 +7,11 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Fixed
+
+- **HomeKit backend:** hub **`command`** RPC failures (for example HAP **-70410** invalid value) now raise the same PG3 **`homekit_hub_rpc_error`** notice as on udi-poly-homekit, with **`command`**, **`device_id`**, transport (**MQTT `client_slug`** or WebSocket), **`characteristic`**, and value context; hub **`command_sync`** timeouts are noticed as well.
+- **HomeKit thermostat / HAP:** mode-aware setpoint and threshold writes, heat/cool span handling, and IoX temperature rounding in **`hap_apply`** to avoid invalid HAP writes.
+
 ## [4.0.1] - 2026-05-03
 
 ### Changed

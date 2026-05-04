@@ -281,32 +281,38 @@ def apply_characteristic_to_thermostat(
 
 
 def iox_temp_to_hap_celsius(node: 'HomeKitThermostat', driver_val: float) -> float:
-    return _driver_st_to_hap_c(node, driver_val)
+    """IoX thermostat temp driver → HAP **celsius** for ``put_characteristics``.
+
+    Round to **0.1 °C** so accessories (e.g. Ecobee) do not reject long binary floats (-70410).
+    """
+    c = _driver_st_to_hap_c(node, driver_val)
+    return round(float(c) * 10.0) / 10.0
 
 
 def climd_to_hap_target_mode(climd: int) -> int:
     return int(climd) if int(climd) in (0, 1, 2, 3) else 0
 
 
-# PascalCase names for hub ``command`` (PROTOCOL: enum name or UUID).
+# aiohomekit ``CharacteristicsTypes`` attribute names for hub ``command`` / ``get`` (or a HAP UUID).
+# udi-poly-homekit resolves these via ``hasattr(CharacteristicsTypes, spec)`` — not Apple PascalCase.
 def hap_name_target_heating_cooling() -> str:
-    return 'TargetHeatingCoolingMode'
+    return 'HEATING_COOLING_TARGET'
 
 
 def hap_name_target_temperature() -> str:
-    return 'TargetTemperature'
+    return 'TEMPERATURE_TARGET'
 
 
 def hap_name_heating_threshold() -> str:
-    return 'HeatingThresholdTemperature'
+    return 'TEMPERATURE_HEATING_THRESHOLD'
 
 
 def hap_name_cooling_threshold() -> str:
-    return 'CoolingThresholdTemperature'
+    return 'TEMPERATURE_COOLING_THRESHOLD'
 
 
 def hap_name_target_fan_state() -> str:
-    return 'TargetFanState'
+    return 'FAN_STATE_TARGET'
 
 
 def hap_name_vendor_ecobee_set_hold_schedule() -> str:

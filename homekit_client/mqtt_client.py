@@ -15,6 +15,7 @@ import aiomqtt
 PROTOCOL_VERSION = "1"
 # aiomqtt 2.x uses ``qos: int``; there is no ``aiomqtt.QoS`` (MQTT QoS 1 = at least once).
 MQTT_QOS_AT_LEAST_ONCE = 1
+DEFAULT_COMMAND_RPC_TIMEOUT_SEC = 30.0
 
 ROOT = "udi/homekit/hubs"
 
@@ -131,7 +132,7 @@ class HubMqttClient:
         device_id: str,
         characteristic: str,
         value: Any,
-        timeout: float = 30.0,
+        timeout: float = DEFAULT_COMMAND_RPC_TIMEOUT_SEC,
     ) -> bool:
         if not self.wait_hello(timeout):
             raise TimeoutError("HomeKit hub hello timeout")

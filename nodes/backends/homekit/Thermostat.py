@@ -92,18 +92,81 @@ class HomeKitThermostat(Node):
             return False
         return self.hk.hub_command(self.device_id_hub, hap_name, hap_value)
 
+    def _climd_write_mode(self) -> int:
+        """IoX ``CLIMD`` for hub writes: 0 off, 1 heat, 2 cool, 3 auto, 4 aux."""
+        try:
+            return int(float(self.getDriver('CLIMD')))
+        except (TypeError, ValueError):
+            return 3
+
+    def _heat_cool_min_span(self) -> float:
+        return 0.5 if self.use_celsius else 1.0
+
+    def _hap_char_for_heat_driver_write(self) -> str:
+        """HAP name for **CLISPH** writes.
+
+        **Auto** uses heating/cooling **thresholds**. **Heat / aux** use the single
+        ``TEMPERATURE_TARGET`` (Ecobee rejects threshold writes in single-setpoint modes).
+        **Cool** keeps the heat **threshold** (inactive band for auto).
+        """
+        m = self._climd_write_mode()
+        if m == 3:
+            return hap_apply.hap_name_heating_threshold()
+        if m == 2:
+            return hap_apply.hap_name_heating_threshold()
+        return hap_apply.hap_name_target_temperature()
+
+    def _hap_char_for_cool_driver_write(self) -> str:
+        """HAP name for **CLISPC** writes (inverse of :meth:`_hap_char_for_heat_driver_write`)."""
+        m = self._climd_write_mode()
+        if m == 3:
+            return hap_apply.hap_name_cooling_threshold()
+        if m in (1, 4):
+            return hap_apply.hap_name_cooling_threshold()
+        return hap_apply.hap_name_target_temperature()
+
     def cmd_set_pf(self, cmd):
         driver = cmd.get('cmd')
         if driver == 'CLISPH':
-            c = hap_apply.hap_name_heating_threshold()
-            v = hap_apply.iox_temp_to_hap_celsius(self, float(cmd['value']))
+            heat = float(cmd['value'])
+            m = self._climd_write_mode()
+            span = self._heat_cool_min_span()
+            if m == 3:
+                cool = float(self.getDriver('CLISPC'))
+                if cool < heat + span:
+                    cool = heat + span
+                hv = hap_apply.iox_temp_to_hap_celsius(self, heat)
+                cv = hap_apply.iox_temp_to_hap_celsius(self, cool)
+                if self._hub_write(
+                    hap_apply.hap_name_heating_threshold(), hv
+                ) and self._hub_write(hap_apply.hap_name_cooling_threshold(), cv):
+                    self.set_clisph(heat)
+                    self.set_clispc(cool)
+                return
+            c = self._hap_char_for_heat_driver_write()
+            v = hap_apply.iox_temp_to_hap_celsius(self, heat)
             if self._hub_write(c, v):
-                self.set_clisph(float(cmd['value']))
+                self.set_clisph(heat)
         elif driver == 'CLISPC':
-            c = hap_apply.hap_name_cooling_threshold()
-            v = hap_apply.iox_temp_to_hap_celsius(self, float(cmd['value']))
+            cool = float(cmd['value'])
+            m = self._climd_write_mode()
+            span = self._heat_cool_min_span()
+            if m == 3:
+                heat = float(self.getDriver('CLISPH'))
+                if heat > cool - span:
+                    heat = cool - span
+                hv = hap_apply.iox_temp_to_hap_celsius(self, heat)
+                cv = hap_apply.iox_temp_to_hap_celsius(self, cool)
+                if self._hub_write(
+                    hap_apply.hap_name_heating_threshold(), hv
+                ) and self._hub_write(hap_apply.hap_name_cooling_threshold(), cv):
+                    self.set_clisph(heat)
+                    self.set_clispc(cool)
+                return
+            c = self._hap_char_for_cool_driver_write()
+            v = hap_apply.iox_temp_to_hap_celsius(self, cool)
             if self._hub_write(c, v):
-                self.set_clispc(float(cmd['value']))
+                self.set_clispc(cool)
         elif driver == 'CLIFS':
             c = hap_apply.hap_name_target_fan_state()
             v = int(cmd['value'])
@@ -142,7 +205,8 @@ class HomeKitThermostat(Node):
             return
         h_c = hap_apply.hap_name_heating_threshold()
         c_c = hap_apply.hap_name_cooling_threshold()
-        min_span = 0.5 if self.use_celsius else 1.0
+        t_t = hap_apply.hap_name_target_temperature()
+        min_span = self._heat_cool_min_span()
         if mode == 3:
             heat = float(self.getDriver('CLISPH')) + step
             cool = float(self.getDriver('CLISPC')) + step
@@ -158,13 +222,13 @@ class HomeKitThermostat(Node):
             cur = float(self.getDriver('CLISPH'))
             nxt = cur + step
             v = hap_apply.iox_temp_to_hap_celsius(self, nxt)
-            if self._hub_write(h_c, v):
+            if self._hub_write(t_t, v):
                 self.set_clisph(nxt)
             return
         cur = float(self.getDriver('CLISPC'))
         nxt = cur + step
         v = hap_apply.iox_temp_to_hap_celsius(self, nxt)
-        if self._hub_write(c_c, v):
+        if self._hub_write(t_t, v):
             self.set_clispc(nxt)
 
     commands = {

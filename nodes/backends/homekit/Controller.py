@@ -75,6 +75,16 @@ _HK_TRANSPORT_RESTART_KEYS: Tuple[str, ...] = (
 _HK_DISCONNECT_NOTICE_DEBOUNCE_SEC = 45.0
 
 
+def _normalize_hap_command_value(characteristic: str, value: Any) -> Any:
+    """Round noisy float targets from IoX (e.g. °F→°C) before HAP ``put_characteristics``."""
+    if not isinstance(value, float):
+        return value
+    ch = str(characteristic or '')
+    if 'Temperature' not in ch:
+        return value
+    return round(value, 2)
+
+
 class HomeKitBackend:
     """Runs against :class:`nodes.Controller` (dispatcher) for IoX node lifecycle."""
 
@@ -136,6 +146,50 @@ class HomeKitBackend:
             )
         except Exception:
             LOGGER.exception('HomeKit: failed to set PG3 Notice %r', notice_key)
+
+    def _notice_homekit_hub_rpc_command_error(
+        self,
+        *,
+        device_id: str,
+        characteristic: str,
+        value: Any,
+        message: str,
+    ) -> None:
+        """Mirror **udi-poly-homekit** hub ``hub_rpc_error_notice`` on **this** Node Server’s Notices.
+
+        The hub asyncio bridge sets ``homekit_hub_rpc_error`` on the HomeKit NS only; Ecobee’s
+        :meth:`hub_command` runs here and must set the same key so operators see the failure on
+        the Ecobee PG3 notices panel.
+        """
+        did = str(device_id or '').strip()
+        ch = str(characteristic or '').strip()
+        msg = str(message or '').strip() or 'hub error'
+        parts: list[str] = [f'<p><code>command</code>: {html.escape(msg)}</p>']
+        if did:
+            parts.append(f'<p>device_id: <code>{html.escape(did)}</code></p>')
+        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        if tr == 'mqtt':
+            slug = str(self.dispatcher.effective_params.get('hk_mqtt_client_slug') or '').strip()
+            if not slug:
+                slug = 'udi-poly-ecobee'
+            parts.append(f'<p>MQTT client_slug: <code>{html.escape(slug)}</code></p>')
+        else:
+            parts.append('<p>Transport: <code>WebSocket</code></p>')
+        if ch:
+            parts.append(f'<p>characteristic: <code>{html.escape(ch)}</code></p>')
+        try:
+            v_repr = repr(value)
+            if len(v_repr) > 200:
+                v_repr = v_repr[:200] + '…'
+            parts.append(f'<p>value: <code>{html.escape(v_repr)}</code></p>')
+        except Exception:
+            pass
+        self._pg3_warn_and_notice(
+            'homekit_hub_rpc_error',
+            title='HomeKit hub client RPC error',
+            log_message=f'HomeKit hub RPC error (command): {msg}',
+            notice_html=''.join(parts),
+        )
 
     def _plugin_root(self) -> Path:
         return Path(__file__).resolve().parent.parent.parent.parent
@@ -1283,6 +1337,7 @@ class HomeKitBackend:
 
     def hub_command(self, device_id: str, characteristic: str, value: Any) -> bool:
         did = str(device_id or '').strip().lower()
+        value = _normalize_hap_command_value(characteristic, value)
         if self._dry_run():
             LOGGER.info(
                 'HomeKit dry_run: would command device_id=%s %s=%r',
@@ -1301,13 +1356,31 @@ class HomeKitBackend:
 
         try:
             return _once()
+        except TimeoutError:
+            self._notice_homekit_hub_rpc_command_error(
+                device_id=did,
+                characteristic=str(characteristic or ''),
+                value=value,
+                message=(
+                    'Timed out waiting for hub RPC ack — check HomeKit hub logs (MQTT/WebSocket); '
+                    'often a bad characteristic token or the hub not replying.'
+                ),
+            )
+            LOGGER.error(
+                'HomeKit hub_command: timed out waiting for hub RPC ack; check hub logs (MQTT/WS) for '
+                'errors — often a bad characteristic token or hub not replying. device_id=%s %s=%r',
+                did,
+                characteristic,
+                value,
+            )
+            return False
         except RuntimeError as e:
             if 'connection closed' not in str(e).lower():
-                LOGGER.exception(
-                    'HomeKit hub_command failed device_id=%s %s=%r',
-                    did,
-                    characteristic,
-                    value,
+                self._notice_homekit_hub_rpc_command_error(
+                    device_id=did,
+                    characteristic=str(characteristic or ''),
+                    value=value,
+                    message=str(e),
                 )
                 return False
             LOGGER.warning(
