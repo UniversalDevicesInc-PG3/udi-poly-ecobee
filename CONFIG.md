@@ -23,7 +23,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | `hk_mqtt_hub_slug` | MQTT | Must match the hub Custom Param **`mqtt_hub_slug`** (topic segment). Default `default`. Allowed characters: `[A-Za-z0-9_-]` (length 1–128). |
 | `hk_mqtt_client_slug` | MQTT | Your client’s topic segment under `…/clients/<slug>/…`; must match the MQTT topic you publish to, and **`hello.client`** (sanitized) must match this slug if you send **`client`** on hello. Default **`udi-poly-ecobee`** (this plugin’s PG3 id). **Set a unique value** if you run multiple Ecobee NS instances or other hubs’ clients on the same broker and need to avoid collisions. Same character rules as **`hk_mqtt_hub_slug`**. |
 | `use_celsius` | No | `auto`, `true`, or `false` for temperature units. Default `auto`. |
-| `dry_run` | No | `true` or `false`. When `true`, the HomeKit path logs writes instead of applying them. Default `true`. |
+| `dry_run` | No | `true` or `false`. When `true`, the HomeKit path logs writes instead of applying them. Default `false`. |
 | `api_key` | Cloud / PIN | Your **Ecobee developer application key** for the cloud API (required for PIN flow on **local** Polyglot; also the path if you still have a grandfathered personal key). **Not** the old UDI/Polyglot Cloud OAuth path—see **Before you start**. |
 
 ## Custom Typed Configuration Parameters

@@ -39,7 +39,7 @@ This is the **supported** integration path for Ecobee: **[udi-poly-homekit](http
 - Set **`hk_ws_url`** to the hub WebSocket URL (see udi-poly-homekit docs for port and TLS).
 - Optionally set **`hk_ws_token`** if the hub requires a hello/auth token.
 - **`use_celsius`**: `auto`, `true`, or `false` (same meaning as cloud; `auto` currently behaves like Fahrenheit for HomeKit in code paths that do not infer from the accessory).
-- **`dry_run`**: default **`true`**. While `true`, thermostat commands are **logged only** and **not** sent to the hub; IoX drivers are not updated from those writes. Set to **`false`** when you are ready for real control. A PG3 **Notice** (`homekit_dry_run`) reminds you when dry run is on.
+- **`dry_run`**: default **`false`**. Set to **`true`** to log thermostat commands without sending them to the hub; IoX drivers are not updated from those writes. A PG3 **Notice** (`homekit_dry_run`) reminds you when dry run is on.
 
 **Custom Typed Params** (PG3) for HomeKit:
 

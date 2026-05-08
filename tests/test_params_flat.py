@@ -20,7 +20,7 @@ def test_defaults_when_empty_raw():
     assert out['hk_transport'] == 'websocket'
     assert out['hk_ws_url'] == DEFAULT_EFFECTIVE['hk_ws_url']
     assert out['hk_mqtt_client_slug'] == DEFAULT_HK_MQTT_CLIENT_SLUG == DEFAULT_EFFECTIVE['hk_mqtt_client_slug']
-    assert out['dry_run'] == 'true'
+    assert out['dry_run'] == 'false'
 
 
 def test_mqtt_transport_preserved_slugs():

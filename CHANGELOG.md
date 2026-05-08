@@ -7,6 +7,13 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-05-08
+
+### Changed
+
+- **HomeKit backend:** `dry_run` now defaults to **`false`** so thermostat commands are sent to the HomeKit hub by default. Set Custom Param **`dry_run`** to **`true`** to restore log-only command behavior.
+- **Release workflow:** Makefile now matches udi-poly-homekit with **`release`**, **`beta`**, and **`production`** targets that push track refs and build PG3 upload zips.
+
 ### Fixed
 
 - **HomeKit backend:** hub **`command`** RPC failures (for example HAP **-70410** invalid value) now raise the same PG3 **`homekit_hub_rpc_error`** notice as on udi-poly-homekit, with **`command`**, **`device_id`**, transport (**MQTT `client_slug`** or WebSocket), **`characteristic`**, and value context; hub **`command_sync`** timeouts are noticed as well.

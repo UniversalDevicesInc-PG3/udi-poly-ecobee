@@ -277,7 +277,7 @@ class HomeKitBackend:
 
     def sync_param_notices(self) -> None:
         """Refresh HomeKit notices that depend on flat params (e.g. dry_run)."""
-        dr = str(self.dispatcher.effective_params.get('dry_run', 'true')).strip().lower()
+        dr = str(self.dispatcher.effective_params.get('dry_run', 'false')).strip().lower()
         if dr == 'true':
             self.Notices['homekit_dry_run'] = (
                 'HomeKit <b>dry_run</b> is enabled: commands to the hub are logged only, not sent. '
@@ -597,7 +597,7 @@ class HomeKitBackend:
         return False
 
     def _dry_run(self) -> bool:
-        return str(self.dispatcher.effective_params.get('dry_run', 'true')).strip().lower() == 'true'
+        return str(self.dispatcher.effective_params.get('dry_run', 'false')).strip().lower() == 'true'
 
     def _maybe_update_profile(self, climates: Dict[str, List[Dict[str, str]]]) -> None:
         info = get_profile_info(LOGGER)

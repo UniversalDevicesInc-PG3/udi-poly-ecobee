@@ -33,7 +33,7 @@ DEFAULT_EFFECTIVE: Dict[str, str] = {
     'hk_mqtt_hub_slug': 'default',
     'hk_mqtt_client_slug': DEFAULT_HK_MQTT_CLIENT_SLUG,
     'use_celsius': 'auto',
-    'dry_run': 'true',
+    'dry_run': 'false',
 }
 
 
@@ -129,10 +129,10 @@ def normalize_flat_params(
         errs.append(f"use_celsius: {raw.get('use_celsius')!r} (allowed: auto, true, false)")
         uc = prev_m.get('use_celsius', 'auto')
 
-    dr = str(raw.get('dry_run', prev_m.get('dry_run', 'true'))).strip().lower()
+    dr = str(raw.get('dry_run', prev_m.get('dry_run', DEFAULT_EFFECTIVE['dry_run']))).strip().lower()
     if dr not in ('true', 'false'):
         errs.append(f"dry_run: {raw.get('dry_run')!r} (allowed: true, false)")
-        dr = prev_m.get('dry_run', 'true')
+        dr = prev_m.get('dry_run', DEFAULT_EFFECTIVE['dry_run'])
 
     mhost = str(raw.get('hk_mqtt_host', '') or '').strip()
     if not mhost:
