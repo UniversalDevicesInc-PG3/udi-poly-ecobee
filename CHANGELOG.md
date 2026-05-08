@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.5] - 2026-05-08
+
+### Fixed
+
+- **HomeKit sensors:** when a remote sensor already exists in PG3's node database, re-send its `addnode` once per plugin process so IoX can recover if it missed or dropped the original add. This helps repair installs where `rs_*` nodes are present in Polyglot but absent from IoX.
+
 ## [4.0.4] - 2026-05-08
 
 ### Fixed

@@ -110,6 +110,7 @@ class HomeKitBackend:
         self._thermostat_primary_aid: Dict[str, int] = {}
         self._sensor_by_key: Dict[Tuple[str, int], HomeKitSensor] = {}
         self._motion_sensor_by_device: Dict[str, HomeKitSensor] = {}
+        self._hk_existing_sensor_addnode_retried: Set[str] = set()
         self._unknown_char_logged: Set[str] = set()
         self._list_devices_lock = threading.Lock()
         self._thermostat_snapshot_timers: Dict[str, threading.Timer] = {}
@@ -118,6 +119,8 @@ class HomeKitBackend:
         self._list_devices_topology_fp: Optional[str] = None
         self._list_devices_force_snapshot_resync: bool = False
         self._hk_suppress_transport_callbacks: bool = False
+        self._hk_client_generation: int = 0
+        self._hk_active_transport: Optional[str] = None
         self._hk_last_transport_snap: Optional[Dict[str, str]] = None
         self._hk_last_disconnect_notice_monotonic: float = 0.0
 
@@ -213,11 +216,21 @@ class HomeKitBackend:
     def close(self) -> None:
         self._hk_suppress_transport_callbacks = True
         try:
+            self._hk_client_generation += 1
+            self._hk_active_transport = None
             self._cancel_all_thermostat_snapshot_timers()
             self._list_devices_topology_fp = None
             self._list_devices_force_snapshot_resync = False
             if self._ws is not None:
-                self._ws.stop()
+                client = self._ws
+                # Prevent a retiring retry thread from re-adding stale disconnect notices
+                # after a transport switch (for example WebSocket -> MQTT).
+                for attr in ('_on_connected', '_on_disconnected', '_on_transport_error'):
+                    try:
+                        setattr(client, attr, None)
+                    except Exception:
+                        LOGGER.debug('detach HomeKit client callback %s failed', attr, exc_info=True)
+                client.stop()
                 self._ws = None
         finally:
             self._hk_suppress_transport_callbacks = False
@@ -356,6 +369,9 @@ class HomeKitBackend:
         tr = str(p.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         self._prime_hk_path_drivers_for_transport(tr)
         self.close()
+        self._hk_client_generation += 1
+        gen = self._hk_client_generation
+        self._hk_active_transport = tr
         if tr == 'mqtt':
             try:
                 port = int(str(p.get('hk_mqtt_port') or DEFAULT_EFFECTIVE['hk_mqtt_port']).strip())
@@ -384,9 +400,9 @@ class HomeKitBackend:
                 on_event=self._on_hap_event,
                 on_list_devices=self._on_list_devices,
                 on_warnings=self._on_hub_warnings,
-                on_connected=self._on_ws_connected,
-                on_disconnected=self._on_ws_disconnected,
-                on_transport_error=self._on_ws_transport_error,
+                on_connected=lambda tr=tr, gen=gen: self._on_ws_connected(tr, gen),
+                on_disconnected=lambda tr=tr, gen=gen: self._on_ws_disconnected(tr, gen),
+                on_transport_error=lambda message, tr=tr, gen=gen: self._on_ws_transport_error(message, tr, gen),
                 logger=LOGGER,
             )
         else:
@@ -399,13 +415,35 @@ class HomeKitBackend:
                 on_event=self._on_hap_event,
                 on_list_devices=self._on_list_devices,
                 on_warnings=self._on_hub_warnings,
-                on_connected=self._on_ws_connected,
-                on_disconnected=self._on_ws_disconnected,
-                on_transport_error=self._on_ws_transport_error,
+                on_connected=lambda tr=tr, gen=gen: self._on_ws_connected(tr, gen),
+                on_disconnected=lambda tr=tr, gen=gen: self._on_ws_disconnected(tr, gen),
+                on_transport_error=lambda message, tr=tr, gen=gen: self._on_ws_transport_error(message, tr, gen),
                 logger=LOGGER,
             )
         self._ws.start()
         self._hk_last_transport_snap = self._hk_transport_snap()
+
+    def _hk_callback_is_current(self, generation: Optional[int]) -> bool:
+        if self._hk_suppress_transport_callbacks:
+            return False
+        if generation is None:
+            return True
+        if generation != self._hk_client_generation:
+            LOGGER.debug(
+                'Ignoring stale HomeKit transport callback generation=%s current=%s',
+                generation,
+                self._hk_client_generation,
+            )
+            return False
+        return True
+
+    def _hk_callback_transport(self, transport: Optional[str]) -> str:
+        tr = str(transport or self._hk_active_transport or '').strip().lower()
+        if tr in ('websocket', 'mqtt'):
+            return tr
+        return str(
+            self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])
+        ).strip().lower()
 
     def _on_hub_warnings(self, warnings: List[Dict[str, Any]]) -> None:
         """
@@ -451,18 +489,18 @@ class HomeKitBackend:
             + '<br/>'.join(lines)
         )
 
-    def _on_ws_connected(self) -> None:
-        if self._hk_suppress_transport_callbacks:
+    def _on_ws_connected(self, transport: Optional[str] = None, generation: Optional[int] = None) -> None:
+        if not self._hk_callback_is_current(generation):
             return
         self.dispatcher.setDriver('GV1', 1)
-        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
+        tr = self._hk_callback_transport(transport)
         if tr == 'mqtt':
             self._set_hk_ws_path_driver(_HK_PATH_UNUSED)
             self._set_hk_mqtt_path_driver(_HK_PATH_CONNECTED)
         else:
             self._set_hk_ws_path_driver(_HK_PATH_CONNECTED)
             self._set_hk_mqtt_path_driver(_HK_PATH_UNUSED)
-        LOGGER.info('HomeKit hub: hello OK (%s transport)', tr)
+        LOGGER.warning('HomeKit hub: hello OK (%s transport)', tr)
         for nk in ('homekit_hub_unreachable', 'homekit_hub_disconnected'):
             try:
                 self.Notices.delete(nk)
@@ -471,14 +509,20 @@ class HomeKitBackend:
         # Pairing list is applied from hello ``ack`` ``devices[]`` in ``HubWebSocketClient`` (no bootstrap
         # ``list_devices`` on the hub). Proactive hub ``list_devices`` after pair/unpair still arrives here.
 
-    def _on_ws_transport_error(self, message: str) -> None:
+    def _on_ws_transport_error(
+        self,
+        message: str,
+        transport: Optional[str] = None,
+        generation: Optional[int] = None,
+    ) -> None:
         """Hub transport connect/hello failure (WebSocket or MQTT)."""
-        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
-        if not self._hk_suppress_transport_callbacks:
-            if tr == 'mqtt':
-                self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
-            else:
-                self._set_hk_ws_path_driver(_HK_PATH_NOT_CONNECTED)
+        if not self._hk_callback_is_current(generation):
+            return
+        tr = self._hk_callback_transport(transport)
+        if tr == 'mqtt':
+            self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
+        else:
+            self._set_hk_ws_path_driver(_HK_PATH_NOT_CONNECTED)
         detail = html.escape(str(message or 'connection failed'))
         log_line = f'HomeKit hub transport error ({tr}): {message}'
         if tr == 'mqtt':
@@ -509,11 +553,11 @@ class HomeKitBackend:
                 ),
             )
 
-    def _on_ws_disconnected(self) -> None:
-        if self._hk_suppress_transport_callbacks:
+    def _on_ws_disconnected(self, transport: Optional[str] = None, generation: Optional[int] = None) -> None:
+        if not self._hk_callback_is_current(generation):
             return
         self.dispatcher.setDriver('GV1', 0)
-        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
+        tr = self._hk_callback_transport(transport)
         if tr == 'mqtt':
             self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
         else:
@@ -1125,6 +1169,8 @@ class HomeKitBackend:
         existing = self.poly.getNode(addr)
         if existing is not None and isinstance(existing, HomeKitSensor):
             self._sensor_by_key[key] = existing
+            if not register_only:
+                self._retry_existing_sensor_addnode(existing, addr)
             return existing
         if existing is not None:
             LOGGER.warning(
@@ -1151,6 +1197,17 @@ class HomeKitBackend:
         self.add_node(node)
         self._sensor_by_key[key] = node
         return node
+
+    def _retry_existing_sensor_addnode(self, node: HomeKitSensor, addr: str) -> None:
+        """Re-publish cached PG3 nodes so IoX can recover if it missed the first addnode."""
+        if addr in self._hk_existing_sensor_addnode_retried:
+            return
+        self._hk_existing_sensor_addnode_retried.add(addr)
+        try:
+            self.add_node(node)
+            LOGGER.warning('HomeKit sensor %s already existed in PG3; re-sent addnode to IoX', addr)
+        except Exception:
+            LOGGER.debug('HomeKit sensor %s addnode retry failed', addr, exc_info=True)
 
     @staticmethod
     def _builtin_motion_sensor_label(
@@ -1183,6 +1240,7 @@ class HomeKitBackend:
         node_existing = self.poly.getNode(addr)
         if node_existing is not None and isinstance(node_existing, HomeKitSensor):
             self._motion_sensor_by_device[did] = node_existing
+            self._retry_existing_sensor_addnode(node_existing, addr)
             return node_existing
         if node_existing is not None:
             LOGGER.warning(
