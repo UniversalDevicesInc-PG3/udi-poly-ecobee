@@ -7,6 +7,8 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.3] - 2026-05-08
+
 ### Changed
 
 - **HomeKit transport default:** new installs now seed **`hk_transport`** to **`mqtt`** (was `websocket`). MQTT is the preferred path because the broker survives plugin restarts and gives lower-latency events; **WebSocket** remains fully supported as a fallback when MQTT is not available. Existing installs are unaffected — their stored value is preserved. Set **`hk_transport`** to **`websocket`** in Custom Params to keep using the WebSocket transport. **CONFIG.md** and **README.md** updated to document MQTT as the recommended transport.
