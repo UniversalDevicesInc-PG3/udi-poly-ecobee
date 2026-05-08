@@ -84,3 +84,5 @@ NS*.lock
 svc.pid
 ecobee_snapshot.txt
 ecobee_watch.txt
+.installed
+.local/
