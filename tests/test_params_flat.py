@@ -17,10 +17,19 @@ def test_defaults_when_empty_raw():
     out, errs = normalize_flat_params({})
     assert errs == []
     assert out['backend'] == 'homekit'
-    assert out['hk_transport'] == 'websocket'
+    # MQTT is the preferred HomeKit hub transport on new installs (4.1.0+).
+    assert out['hk_transport'] == 'mqtt'
+    assert DEFAULT_EFFECTIVE['hk_transport'] == 'mqtt'
     assert out['hk_ws_url'] == DEFAULT_EFFECTIVE['hk_ws_url']
     assert out['hk_mqtt_client_slug'] == DEFAULT_HK_MQTT_CLIENT_SLUG == DEFAULT_EFFECTIVE['hk_mqtt_client_slug']
     assert out['dry_run'] == 'false'
+
+
+def test_empty_hk_transport_falls_back_to_default():
+    """Blank ``hk_transport`` (e.g. seeded but never edited) uses :data:`DEFAULT_EFFECTIVE`."""
+    out, errs = normalize_flat_params({'hk_transport': ''})
+    assert errs == []
+    assert out['hk_transport'] == DEFAULT_EFFECTIVE['hk_transport']
 
 
 def test_mqtt_transport_preserved_slugs():
@@ -131,8 +140,11 @@ def test_ws_url_valid():
 
 
 def test_ws_url_invalid_falls_back():
-    prev = {**DEFAULT_EFFECTIVE, 'hk_ws_url': 'ws://127.0.0.1:8163'}
-    out, errs = normalize_flat_params({'hk_ws_url': 'http://nope'}, prev)
+    # Validation only runs when ``hk_transport`` is ``websocket`` (MQTT preserves the URL verbatim).
+    prev = {**DEFAULT_EFFECTIVE, 'hk_transport': 'websocket', 'hk_ws_url': 'ws://127.0.0.1:8163'}
+    out, errs = normalize_flat_params(
+        {'hk_transport': 'websocket', 'hk_ws_url': 'http://nope'}, prev
+    )
     assert errs
     assert out['hk_ws_url'] == 'ws://127.0.0.1:8163'
 

@@ -8,8 +8,8 @@ If you have any issues are questions you can ask on [PG3 Ecobee NS SubForum](htt
 
 **For new installations, install and configure [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) first**, then this nodeserver.
 
-1. Add **udi-poly-homekit** from the PG3 store. Pair your Ecobee(s) through that plugin, enable its **WebSocket hub**, and note **`ws_host` / `ws_port`** (and **`ws_token`** if you set one). Typical URL on the same machine as Polyglot: `ws://127.0.0.1:8163`.
-2. Add **udi-poly-ecobee**. If **`backend`** is not already in PG3, it is **seeded** once: **`homekit`** for a brand-new NS, or **`cloud`** when the store still looks like a legacy cloud/OAuth/PIN setup (see **`CONFIG.md`**). Set **`hk_ws_url`** to the hub WebSocket URL and **`hk_ws_token`** if required.
+1. Add **udi-poly-homekit** from the PG3 store. Pair your Ecobee(s) through that plugin, then enable its **MQTT** transport (`mqtt_enable`) — **MQTT is the preferred path** because the broker survives plugin restarts and gives lower-latency events. Note the broker host/port and the hub **`mqtt_hub_slug`**. The plugin still exposes a **WebSocket hub** (`ws_host` / `ws_port`, optional `ws_token`, typical URL `ws://127.0.0.1:8163`) as a fallback when MQTT is not available.
+2. Add **udi-poly-ecobee**. If **`backend`** is not already in PG3, it is **seeded** once: **`homekit`** for a brand-new NS, or **`cloud`** when the store still looks like a legacy cloud/OAuth/PIN setup (see **`CONFIG.md`**). On new installs **`hk_transport`** defaults to **`mqtt`**; set **`hk_mqtt_host` / `hk_mqtt_port` / `hk_mqtt_hub_slug`** (and **`hk_mqtt_username` / `hk_mqtt_password`** when the broker requires auth) to match the hub. To use the WebSocket fallback instead, set **`hk_transport`** to **`websocket`** and configure **`hk_ws_url`** (and **`hk_ws_token`** if required).
 
 **Ecobee cloud mode** (REST API) is effectively **unavailable for Universal Devices / Polyglot Cloud OAuth**: Ecobee has **disabled UDI’s access** to the cloud API for this integration. **Cloud mode can only work** if you use **your own Ecobee developer application key** that you obtained **before** Ecobee stopped accepting API traffic for the old shared/UDI keys—and you enter that key in **Custom Params** (**`api_key`**) where applicable (local PIN flow). Do not expect cloud OAuth or the historical UDI key path to work for new setups. Use **HomeKit hub mode** instead.
 
@@ -31,13 +31,13 @@ After the first run. It will refresh any changes every 3 minutes. This is a limi
 
 ## HomeKit hub mode
 
-This is the **supported** integration path for Ecobee: **[udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit)** must already be **installed, paired to your Ecobee, and exposing its WebSocket hub** before this nodeserver can work in **`backend` = `homekit`**. Default URL is often `ws://127.0.0.1:8163` when the hub runs on the same host as Polyglot. See **[Recommended setup (HomeKit)](#recommended-setup-homekit)** for order of operations.
+This is the **supported** integration path for Ecobee: **[udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit)** must already be **installed, paired to your Ecobee, and exposing its hub transport** before this nodeserver can work in **`backend` = `homekit`**. **MQTT** is the preferred transport (and the default of **`hk_transport`** on new installs); **WebSocket** (default URL `ws://127.0.0.1:8163` on the same host as Polyglot) remains supported as a fallback when MQTT is not available. See **[Recommended setup (HomeKit)](#recommended-setup-homekit)** for order of operations.
 
 ### What you configure
 
 - In **Custom Params**, **`backend`** defaults to **`homekit`** on new installs; change it only if you intentionally use **cloud** (see caveats above).
-- Set **`hk_ws_url`** to the hub WebSocket URL (see udi-poly-homekit docs for port and TLS).
-- Optionally set **`hk_ws_token`** if the hub requires a hello/auth token.
+- **`hk_transport`** defaults to **`mqtt`** on new installs (preferred). Set **`hk_mqtt_host` / `hk_mqtt_port` / `hk_mqtt_hub_slug`** to match the hub, plus **`hk_mqtt_username` / `hk_mqtt_password`** when the broker requires auth, and (optionally) **`hk_mqtt_client_slug`** when multiple Ecobee NS instances share one broker.
+- For the WebSocket fallback, set **`hk_transport`** to **`websocket`**, **`hk_ws_url`** to the hub WebSocket URL (see udi-poly-homekit docs for port and TLS), and optionally **`hk_ws_token`** if the hub requires a hello/auth token.
 - **`use_celsius`**: `auto`, `true`, or `false` (same meaning as cloud; `auto` currently behaves like Fahrenheit for HomeKit in code paths that do not infer from the accessory).
 - **`dry_run`**: default **`false`**. Set to **`true`** to log thermostat commands without sending them to the hub; IoX drivers are not updated from those writes. A PG3 **Notice** (`homekit_dry_run`) reminds you when dry run is on.
 
@@ -55,7 +55,7 @@ Full parameter table: **`CONFIG.md`** in this repo (also shown in the PG3 Custom
 
 - **No Ecobee OAuth or PIN** is used; pairing and credentials are entirely in udi-poly-homekit.
 - Thermostats still appear as **`t…`** nodes; remote room sensors appear as **`rs_…`** children (from hub snapshot/events). **Weather / forecast nodes** from the Ecobee API are **not** created on the HomeKit path.
-- **Controller drivers**: **GV1** reflects hub WebSocket connectivity; **GV3** reflects that the hub reported paired devices. Heartbeats behave like cloud.
+- **Controller drivers**: **GV1** is **true** when the active hub transport (the one selected by **`hk_transport`**) has completed **hello**; **GV4** is the WebSocket tri-state (0 = unused, 1 = reconnecting, 2 = connected) and **GV5** is the same for MQTT. **GV3** reflects that the hub reported paired devices. Heartbeats behave like cloud.
 - **Realtime updates** come from hub **event** frames; **QUERY** triggers a **snapshot** read for that device.
 - **Hub metadata characteristics** (accessory information, product data, temperature display units, version, vendor UUIDs, etc.) are classified as *informational*: they are **not copied into IoX drivers** and they **do not** produce **`homekit_unknown_chars`** notices. That only means the plugin does not surface them in PG3 today; they can still matter for Apple/HomeKit or debugging. Temperature display is still driven by **`use_celsius`** in Custom Params, not by HAP Temperature Display Units.
 - HAP characteristics that are truly unknown may still log a warning and accumulate **`homekit_unknown_chars`** (deduplicated by name).

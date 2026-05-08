@@ -23,7 +23,9 @@ DEFAULT_HK_MQTT_CLIENT_SLUG = "udi-poly-ecobee"
 DEFAULT_EFFECTIVE: Dict[str, str] = {
     # Fallback when normalizing empty input; seeding ``backend`` uses :func:`default_backend_for_new_param_seed`.
     'backend': 'homekit',
-    'hk_transport': 'websocket',
+    # MQTT is the preferred HomeKit hub transport (lower latency, broker survives plugin restarts);
+    # WebSocket remains supported when ``mqtt_enable`` is off on the hub.
+    'hk_transport': 'mqtt',
     'hk_ws_url': 'ws://127.0.0.1:8163',
     'hk_ws_token': '',
     'hk_mqtt_host': 'localhost',
@@ -96,16 +98,20 @@ def normalize_flat_params(
         errs.append(f"backend: {raw_backend!r} (allowed: cloud, homekit)")
         backend = prev_m.get('backend', DEFAULT_EFFECTIVE['backend'])
 
-    tr_raw = str(raw.get('hk_transport', prev_m.get('hk_transport', 'websocket'))).strip().lower()
-    if tr_raw in ('ws', 'websocket', ''):
+    tr_default = DEFAULT_EFFECTIVE['hk_transport']
+    tr_raw = str(raw.get('hk_transport', prev_m.get('hk_transport', tr_default))).strip().lower()
+    if tr_raw == '':
+        # Empty / missing on a fresh install falls through to the preferred default (MQTT).
+        transport = tr_default
+    elif tr_raw in ('ws', 'websocket'):
         transport = 'websocket'
     elif tr_raw == 'mqtt':
         transport = 'mqtt'
     else:
         errs.append(f"hk_transport: {raw.get('hk_transport')!r} (allowed: websocket, mqtt)")
-        transport = str(prev_m.get('hk_transport', 'websocket')).strip().lower()
+        transport = str(prev_m.get('hk_transport', tr_default)).strip().lower()
         if transport not in ('websocket', 'mqtt'):
-            transport = 'websocket'
+            transport = tr_default
 
     url = str(raw.get('hk_ws_url', '') or '').strip()
     if not url:

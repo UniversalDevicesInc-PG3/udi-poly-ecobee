@@ -167,7 +167,7 @@ class HomeKitBackend:
         parts: list[str] = [f'<p><code>command</code>: {html.escape(msg)}</p>']
         if did:
             parts.append(f'<p>device_id: <code>{html.escape(did)}</code></p>')
-        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         if tr == 'mqtt':
             slug = str(self.dispatcher.effective_params.get('hk_mqtt_client_slug') or '').strip()
             if not slug:
@@ -269,7 +269,7 @@ class HomeKitBackend:
             LOGGER.info(
                 'HomeKit hub transport or broker/WS settings changed (%s); restarting client (%s)',
                 ', '.join(changed) if changed else 'keys',
-                str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower(),
+                str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower(),
             )
             self._start_ws()
         else:
@@ -353,7 +353,7 @@ class HomeKitBackend:
 
     def _start_ws(self) -> None:
         p = self.dispatcher.effective_params
-        tr = str(p.get('hk_transport', 'websocket')).strip().lower()
+        tr = str(p.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         self._prime_hk_path_drivers_for_transport(tr)
         self.close()
         if tr == 'mqtt':
@@ -455,7 +455,7 @@ class HomeKitBackend:
         if self._hk_suppress_transport_callbacks:
             return
         self.dispatcher.setDriver('GV1', 1)
-        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         if tr == 'mqtt':
             self._set_hk_ws_path_driver(_HK_PATH_UNUSED)
             self._set_hk_mqtt_path_driver(_HK_PATH_CONNECTED)
@@ -473,7 +473,7 @@ class HomeKitBackend:
 
     def _on_ws_transport_error(self, message: str) -> None:
         """Hub transport connect/hello failure (WebSocket or MQTT)."""
-        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         if not self._hk_suppress_transport_callbacks:
             if tr == 'mqtt':
                 self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
@@ -513,7 +513,7 @@ class HomeKitBackend:
         if self._hk_suppress_transport_callbacks:
             return
         self.dispatcher.setDriver('GV1', 0)
-        tr = str(self.dispatcher.effective_params.get('hk_transport', 'websocket')).strip().lower()
+        tr = str(self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])).strip().lower()
         if tr == 'mqtt':
             self._set_hk_mqtt_path_driver(_HK_PATH_NOT_CONNECTED)
         else:
