@@ -93,8 +93,11 @@ PGM-CMD-140E-GV3-FMT = //${c}/to ${v}/ /HoldType//, Hold Type ${v}/
 CMDP-I_TSTAT_ECO_SCHED_OPT-HoldType-NAME = Hold Type
 
 ST-140ES-ST-NAME = Temperature
+ST-140ES-CLIHUM-NAME = Humidity
 ST-140ES-GV1-NAME = Occupancy
 ST-140ES-GV2-NAME = Responding
+ST-140ES-BATLVL-NAME = Battery Level
+ST-140ES-BATLOW-NAME = Battery Low
 
 ST-140EW-ST-NAME = Temperature
 ST-140EW-GV1-NAME = Humidity

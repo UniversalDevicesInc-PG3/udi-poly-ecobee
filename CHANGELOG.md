@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-05-08
+
+### Fixed
+
+- **Profile NLS (Profile Change):** add missing remote-sensor driver names for the `140ES` editor — **CLIHUM** (`Humidity`), **BATLVL** (`Battery Level`), and **BATLOW** (`Battery Low`). The `EcobeeSensor*` nodedefs publish all three but the IoX UI was rendering them without labels. Bumps `profile/version.txt` to **4.0.6**.
+
 ## [4.0.5] - 2026-05-08
 
 ### Fixed
