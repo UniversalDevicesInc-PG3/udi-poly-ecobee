@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.4] - 2026-05-08
+
+### Fixed
+
+- **Profile NLS (Profile Change):** add missing controller names for **GV4** (`HomeKit WebSocket`) / **GV5** (`HomeKit MQTT`) HomeKit transport status drivers and **HKTR** enum labels (`Not Selected` / `Not Connected` / `Connected`) used by the `hktr` editor. Bumps `profile/version.txt` to **4.0.4**.
+
 ## [4.0.3] - 2026-05-08
 
 ### Changed
