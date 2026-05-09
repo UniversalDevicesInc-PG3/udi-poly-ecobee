@@ -100,7 +100,16 @@ class HomeKitThermostat(Node):
             return 3
 
     def _heat_cool_min_span(self) -> float:
-        return 0.5 if self.use_celsius else 1.0
+        """Minimum heat/cool separation when writing both thresholds (auto / CLIMD 3).
+
+        HomeKit sends independent heating and cooling thresholds. Ecobee firmware enforces a
+        **compressor minimum delta** (commonly **3 °F** in the app, user-configurable). If we
+        only reserve **1 °F** here, writes succeed on the bus but the stat bumps the cooling
+        setpoint (e.g. 72 → 73) when heat is 70 — see plugin debug logs vs physical display.
+
+        Celsius thermostats: use ~**1.67 °C** (same as 3 °F) so both unit paths stay consistent.
+        """
+        return 5.0 / 3.0 if self.use_celsius else 3.0
 
     def _hap_char_for_heat_driver_write(self) -> str:
         """HAP name for **CLISPH** writes.

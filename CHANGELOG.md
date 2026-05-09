@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.7] - 2026-05-09
+
+### Fixed
+
+- **HomeKit thermostat (auto):** use **3 °F** (and **5/3 °C** for Celsius nodedefs) minimum heat/cool span when co-writing HAP thresholds so Ecobee’s compressor minimum delta is satisfied on the wire. Previously a **1 °F** slack let HomeKit writes succeed while the stat raised the cooling setpoint (e.g. **72 → 73** when heat was **70**). Bumps `profile/version.txt` to **4.0.7**.
+
 ## [4.0.6] - 2026-05-08
 
 ### Fixed
