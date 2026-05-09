@@ -10,6 +10,7 @@ from homekit_client.hap_apply import (
     gv3_to_ecobee_set_hold_schedule,
     hap_current_fan_state_to_clifrs,
     hap_current_heating_cooling_to_clihcs,
+    iox_temp_to_hap_celsius,
 )
 from node_funcs import climateMap
 
@@ -115,6 +116,27 @@ def test_apply_temperature_target_cool_sets_cool_only():
     assert apply_characteristic_to_thermostat(node, 'TEMPERATURE_TARGET', 20.0) is True
     node.set_clispc.assert_called_once()
     node.set_clisph.assert_not_called()
+
+
+def test_iox_temp_to_hap_fahrenheit_low_bias_picks_min_tenth_c():
+    """Cooling: lowest 0.1 °C bin with same ``toF`` as target (avoids Ecobee UI +1 °F)."""
+    node = MagicMock()
+    node.use_celsius = False
+    assert iox_temp_to_hap_celsius(node, 75, fahrenheit_wire_bias='low') == 23.7
+    assert iox_temp_to_hap_celsius(node, 74, fahrenheit_wire_bias='low') == 23.1
+    assert iox_temp_to_hap_celsius(node, 73, fahrenheit_wire_bias='low') == 22.6
+
+
+def test_iox_temp_to_hap_fahrenheit_high_bias_picks_max_tenth_c():
+    node = MagicMock()
+    node.use_celsius = False
+    assert iox_temp_to_hap_celsius(node, 75, fahrenheit_wire_bias='high') == 24.1
+
+
+def test_iox_temp_to_hap_celsius_rounds_driver_to_tenth():
+    node = MagicMock()
+    node.use_celsius = True
+    assert iox_temp_to_hap_celsius(node, 20.15, fahrenheit_wire_bias='low') == 20.2
 
 
 def test_apply_target_fan_state_maps_to_cloud_clifs():

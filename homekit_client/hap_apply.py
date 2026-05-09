@@ -280,11 +280,39 @@ def apply_characteristic_to_thermostat(
     return True
 
 
-def iox_temp_to_hap_celsius(node: 'HomeKitThermostat', driver_val: float) -> float:
+def iox_temp_to_hap_celsius(
+    node: 'HomeKitThermostat',
+    driver_val: float,
+    *,
+    fahrenheit_wire_bias: Optional[str] = None,
+) -> float:
     """IoX thermostat temp driver → HAP **celsius** for ``put_characteristics``.
 
     Round to **0.1 °C** so accessories (e.g. Ecobee) do not reject long binary floats (-70410).
+
+    **Fahrenheit** (``EcobeeHKF``): naive rounding of :math:`(F-32)/1.8` can land **just above**
+    the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F** exact). Ecobee’s UI
+    then rounds **up**, so the user sees **76 °F** while IoX sent **75**. Mitigate by choosing a
+    0.1 °C bin that still maps back to the same whole °F via :func:`node_funcs.toF` (used on
+    inbound HAP), preferring the **lowest** bin for cooling and the **highest** for heating so
+    compressor-side display rules do not drift **CLISPC** / **CLISPH** by +1 °F.
     """
+    if node.use_celsius:
+        c = float(driver_val)
+        return round(float(c) * 10.0) / 10.0
+
+    if fahrenheit_wire_bias in ('low', 'high'):
+        t = int(round(float(driver_val)))
+        k0 = int(round((float(driver_val) - 32) / 1.8 * 10.0))
+        bins = []
+        for dk in range(-40, 41):
+            c = (k0 + dk) / 10.0
+            if toF(c) != t:
+                continue
+            bins.append(c)
+        if bins:
+            return min(bins) if fahrenheit_wire_bias == 'low' else max(bins)
+
     c = _driver_st_to_hap_c(node, driver_val)
     return round(float(c) * 10.0) / 10.0
 

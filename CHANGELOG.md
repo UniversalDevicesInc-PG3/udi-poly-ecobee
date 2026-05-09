@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.8] - 2026-05-09
+
+### Fixed
+
+- **HomeKit thermostat (°F):** HAP writes use **0.1 °C** steps; naive Fahrenheit→Celsius rounding can land just **above** the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F**), and Ecobee’s display then shows **+1 °F**. **`iox_temp_to_hap_celsius`** now accepts **`fahrenheit_wire_bias`**: **low** for cooling / **CLISPC** (lowest compatible 0.1 °C bin per **`toF`**) and **high** for heating / **CLISPH**. Bumps `profile/version.txt` to **4.0.8**.
+
 ## [4.0.7] - 2026-05-09
 
 ### Fixed
