@@ -151,8 +151,9 @@ def write_ecobee_climate_profile(
                 for line in in_h:
                     line = re.sub(r'tstatid', f'{tid}', line)
                     line = re.sub(r'tstatcnta', f'{cnt_a}', line)
-                    line = re.sub(r'tstatcnt', f'{cnt}', line)
+                    # Must replace ``tstatcnt_hk_hi`` before ``tstatcnt``: the latter is a prefix of the former.
                     line = re.sub(r'tstatcnt_hk_hi', f'{hk_hi}', line)
+                    line = re.sub(r'tstatcnt', f'{cnt}', line)
                     editor_h.write(line)
             nls.write('\n')
             nls.write(f'ND-EcobeeC_{tid}-NAME = Ecobee Thermostat {tid} (C)\n')

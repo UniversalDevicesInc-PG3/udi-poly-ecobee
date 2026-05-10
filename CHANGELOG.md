@@ -7,6 +7,14 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-05-11
+
+Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.1**). Upload **Ecobee-beta-4.1.1.zip** (or equivalent) to the PG3 **Beta** channel; production **Release** when promoted.
+
+### Fixed
+
+- **HomeKit CT_HK editor (per thermostat):** generated **subset** was **0-11_hk_hi** because **tstatcnt** was substituted inside **tstatcnt_hk_hi**. **profile_writer** now replaces **tstatcnt_hk_hi** before **tstatcnt**, so the hold command editor is **subset="0-3"** as intended. Regression assertion in **tests/test_profile_writer.py**.
+
 ## [4.1.0] - 2026-05-10
 
 Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.0**).

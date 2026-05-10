@@ -76,7 +76,7 @@ HomeKit thermostats use nodedefs **`EcobeeHKC_<id>`** / **`EcobeeHKF_<id>`** (Ce
 
 **Hold type (Running / Hold next / Hold indefinite) vs HomeKit GV3:** On **cloud** thermostats, **CLISMD** is *Schedule mode*: Running cancels holds; the two Hold options choose whether the hold lasts until the next scheduled event or indefinitely, and that choice is sent to the Ecobee API (including when you change comfort type with **GV3**). On **HomeKit** thermostats there is **no CLISMD** and **no** IoX driver that reports hold *duration*. **GV3** **commands** are limited to the four hold slots above; **read** still uses ``VENDOR_ECOBEE_CURRENT_MODE``. After a HomeKit write you can refresh **GV3** to see which program slot the thermostat reports; you **cannot** tell from this nodeserver whether the hold is “until next” or “indefinite”—use the **Ecobee app** or **cloud** backend if you need that distinction.
 
-After upgrading, restart the nodeserver and let the profile refresh (version **4.1.0**+). Existing HomeKit thermostat nodes pick up the new nodedef id on reload.
+After upgrading, restart the nodeserver and let the profile refresh (version **4.1.1**+). Existing HomeKit thermostat nodes pick up the new nodedef id on reload.
 
 ### Limitations (HomeKit path)
 
