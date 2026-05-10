@@ -7,7 +7,17 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Set
 
-from node_funcs import climateList as DEFAULT_CLIMATE_CATALOG, make_file_dir
+from node_funcs import climateList as DEFAULT_CLIMATE_CATALOG, climateMap, make_file_dir
+
+
+def homekit_gv3_command_subset_hi() -> int:
+    """Inclusive high index for HomeKit **GV3** command list (``VENDOR_ECOBEE_SET_HOLD_SCHEDULE`` four slots)."""
+    return max(
+        int(climateMap['away']),
+        int(climateMap['home']),
+        int(climateMap['sleep']),
+        int(climateMap['smart1']),
+    )
 
 
 def homekit_climate_details_for_device(
@@ -136,11 +146,13 @@ def write_ecobee_climate_profile(
                         nodedef_h.write(re.sub(r'tstatid', f'{tid}', line))
             cnt_a = max(0, len(climate_catalog) - 1)
             cnt = max(0, len(climate_catalog) - 5)
+            hk_hi = homekit_gv3_command_subset_hi()
             with open(editors_template, 'r', encoding='utf-8') as in_h:
                 for line in in_h:
                     line = re.sub(r'tstatid', f'{tid}', line)
                     line = re.sub(r'tstatcnta', f'{cnt_a}', line)
                     line = re.sub(r'tstatcnt', f'{cnt}', line)
+                    line = re.sub(r'tstatcnt_hk_hi', f'{hk_hi}', line)
                     editor_h.write(line)
             nls.write('\n')
             nls.write(f'ND-EcobeeC_{tid}-NAME = Ecobee Thermostat {tid} (C)\n')

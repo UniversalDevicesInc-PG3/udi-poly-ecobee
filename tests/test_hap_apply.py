@@ -160,5 +160,22 @@ def test_gv3_to_ecobee_set_hold_schedule_round_trip_home():
     assert gv3_to_ecobee_set_hold_schedule(g) == 0
 
 
+def test_gv3_to_ecobee_set_hold_schedule_vacation_maps_to_hap_away():
+    """``vacation`` (GV3 10) must not be sent as wire 10 — HAP allows only 0–3 (-70410)."""
+    assert gv3_to_ecobee_set_hold_schedule(climateMap['vacation']) == 2
+
+
+def test_gv3_to_ecobee_set_hold_schedule_smart_away_maps_to_hap_away():
+    assert gv3_to_ecobee_set_hold_schedule(climateMap['smartAway']) == 2
+
+
+def test_gv3_to_ecobee_set_hold_schedule_smart2_maps_to_hap_temp():
+    assert gv3_to_ecobee_set_hold_schedule(climateMap['smart2']) == 3
+
+
+def test_gv3_to_ecobee_set_hold_schedule_unknown_high_maps_to_temp():
+    assert gv3_to_ecobee_set_hold_schedule(99) == 3
+
+
 def test_clifs_to_hap_fan_auto_is_one():
     assert clifs_to_hap_fan_target(0) == 1

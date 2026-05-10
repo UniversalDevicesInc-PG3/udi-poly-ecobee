@@ -30,7 +30,7 @@
           <p id="" editor="I_TSTAT_HUM_SET" init="GV1" />
         </cmd>
         <cmd id="GV3">
-          <p id="" editor="CT_tstatid" init="GV3" />
+          <p id="" editor="CT_HK_tstatid" init="GV3" />
         </cmd>
         <cmd id="BRT">
           <p id="" editor="I_SETTEMP_C" optional="T" />
@@ -73,7 +73,7 @@
           <p id="" editor="I_TSTAT_HUM_SET" init="GV1" />
         </cmd>
         <cmd id="GV3">
-          <p id="" editor="CT_tstatid" init="GV3" />
+          <p id="" editor="CT_HK_tstatid" init="GV3" />
         </cmd>
         <cmd id="BRT">
           <p id="" editor="I_SETTEMP_F" optional="T" />

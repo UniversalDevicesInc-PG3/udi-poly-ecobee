@@ -24,7 +24,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | `hk_mqtt_client_slug` | MQTT | Your client’s topic segment under `…/clients/<slug>/…`; must match the MQTT topic you publish to, and **`hello.client`** (sanitized) must match this slug if you send **`client`** on hello. Default **`udi-poly-ecobee`** (this plugin’s PG3 id). **Set a unique value** if you run multiple Ecobee NS instances or other hubs’ clients on the same broker and need to avoid collisions. Same character rules as **`hk_mqtt_hub_slug`**. |
 | `use_celsius` | No | `auto`, `true`, or `false` for temperature units. Default `auto`. |
 | `dry_run` | No | `true` or `false`. When `true`, the HomeKit path logs writes instead of applying them. Default `false`. |
-| `api_key` | Cloud / PIN | Your **Ecobee developer application key** (used as Ecobee OAuth **`client_id`**). Required for PIN flow on **local** Polyglot. With **`backend=cloud`** and **Polyglot OAuth**, a non-empty value **overrides** the Polyglot-injected default and must be a key you registered in the Ecobee developer portal with a **redirect URI** matching Polyglot’s callback: production `https://polyglot.isy.io/api/oauth/callback`, pgtest `https://pgtest.isy.io/api/oauth/callback`. See **Before you start** for UDI/shared-key limitations. |
+| `api_key` | Cloud / PIN | Your **Ecobee developer application key** (used as Ecobee OAuth **`client_id`**). Required for PIN flow on **local** Polyglot. With **`backend=cloud`** and **Polyglot OAuth**, a non-empty value **overrides** the Polyglot-injected default and must be a key you registered in the Ecobee developer portal with a **redirect URI** matching Polyglot’s callback: production `https://polyglot.isy.io/api/oauth/callback`. See **Before you start** for UDI/shared-key limitations. |
 
 ## Custom Typed Configuration Parameters
 
@@ -34,7 +34,7 @@ Use **Custom Typed Params** in PG3 for HomeKit mode:
 | ------- | ------- |
 | **HomeKit thermostat address overrides** | Map hub `device_id` to an Ecobee thermostat id for IoX address `t<id>`. |
 | **HomeKit remote sensor address overrides** | Optional hints for `rs_*` sensor node addresses. |
-| **Climate program labels** | Per `device_id`: override **climateList** slot labels (by index) for both **HomeKit** and **cloud**; **GV3** editors match **CT_*_\<tstat\>*** on both paths. |
+| **Climate program labels** | Per `device_id`: override **climateList** slot labels (by index) in **CT_*_\<tstat\>*** NLS. **Cloud** **GV3** uses the full list; **HomeKit** **GV3** **commands** only offer indices **0–3** (**away / home / sleep / smart1**), but labels for those indices still come from this table. |
 
 See **README.md**: **Recommended setup (HomeKit)** and **HomeKit hub mode** first; **Initial setup (cloud backend only)** only if you use **`backend`** **`cloud`**.
 

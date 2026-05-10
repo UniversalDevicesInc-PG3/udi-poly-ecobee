@@ -58,7 +58,11 @@ def ecobee_hk_comfort_to_gv3(hub_byte: int) -> int:
 
 
 def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
-    """Map IoX ``GV3`` → Ecobee ``VENDOR_ECOBEE_SET_HOLD_SCHEDULE`` byte. Unmapped indices pass through."""
+    """Map IoX ``GV3`` → Ecobee ``VENDOR_ECOBEE_SET_HOLD_SCHEDULE`` byte (HAP **0–3** only).
+
+    IoX uses full ``climateList`` indices (e.g. ``vacation`` = 10). Values outside 0–3 were
+    previously forwarded as-is and the accessory rejected them (**-70410** invalid write).
+    """
     g = int(gv3)
     if g == int(climateMap['home']):
         return _ECOBEE_HK_COMFORT_HOME
@@ -68,7 +72,26 @@ def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
         return _ECOBEE_HK_COMFORT_AWAY
     if g == int(climateMap['smart1']):
         return _ECOBEE_HK_COMFORT_TEMP
-    return g
+    for name in ('smart2', 'smart3', 'smart4', 'smart5', 'smart6', 'smart7'):
+        if g == int(climateMap[name]):
+            return _ECOBEE_HK_COMFORT_TEMP
+    if g == int(climateMap['vacation']):
+        return _ECOBEE_HK_COMFORT_AWAY
+    if g == int(climateMap['smartAway']):
+        return _ECOBEE_HK_COMFORT_AWAY
+    if g == int(climateMap['smartHome']):
+        return _ECOBEE_HK_COMFORT_HOME
+    if g == int(climateMap['demandResponse']):
+        return _ECOBEE_HK_COMFORT_AWAY
+    if g == int(climateMap['unknown']):
+        return _ECOBEE_HK_COMFORT_TEMP
+    if g == int(climateMap['wakeup']):
+        return _ECOBEE_HK_COMFORT_HOME
+    _LOG.debug(
+        'gv3_to_ecobee_set_hold_schedule: GV3=%s not in climateMap hold mapping; using TEMP (3)',
+        g,
+    )
+    return _ECOBEE_HK_COMFORT_TEMP
 
 
 def hap_target_fan_state_to_clifs(hap_val: int) -> int:

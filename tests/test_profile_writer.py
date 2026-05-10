@@ -9,6 +9,7 @@ import pytest
 
 from homekit_client.profile_writer import (
     homekit_climate_details_for_device,
+    homekit_gv3_command_subset_hi,
     profile_needs_update,
     write_ecobee_climate_profile,
 )
@@ -28,6 +29,10 @@ def test_homekit_climate_details_override():
     d = homekit_climate_details_for_device('AA:BB', rows, climateList[:5])
     assert d[1]['name'] == 'Custom'
     assert d[0]['ref'] == climateList[0]
+
+
+def test_homekit_gv3_command_subset_hi_matches_first_four_climate_indices():
+    assert homekit_gv3_command_subset_hi() == 3
 
 
 def test_homekit_climate_details_skips_indices_when_requested():
@@ -72,7 +77,8 @@ def test_write_ecobee_climate_profile_writes_custom_xml(mini_plugin: Path):
     editor = mini_plugin / 'profile' / 'editor' / 'custom.xml'
     ed = editor.read_text(encoding='utf-8')
     assert 'CTA_9243' in ed
-    assert 'CT_HK_' not in ed
+    assert 'CT_HK_9243' in ed
+    assert 'subset="0-3"' in ed
     assert 'I_HK_TSTAT_FAN_MODE' not in ed
     assert 'I_TSTAT_FAN_MODE' in text
     nls = (mini_plugin / 'profile' / 'nls' / 'en_us.txt').read_text(encoding='utf-8')

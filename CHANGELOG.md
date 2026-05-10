@@ -7,6 +7,18 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-05-10
+
+Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.0**).
+
+### Changed
+
+- **HomeKit thermostat profile:** **GV3** **commands** use editor **CT_HK_\<tstat\>** with subset **0–3** (IoX **away / home / sleep / smart1**) so the IoX UI cannot select hold values the Ecobee HomeKit vendor characteristic rejects. **GV3** **status** keeps the full **CTA_\<tstat\>** range for label resolution. **README** / **CONFIG.md** document the four hold slots vs the Ecobee app.
+
+### Fixed
+
+- **HomeKit GV3 writes:** map remaining **climateList** indices to valid **SET_HOLD** bytes before sending to the hub (avoids HAP **-70410** for e.g. vacation). See **`homekit_client/hap_apply.py`** ``gv3_to_ecobee_set_hold_schedule``.
+
 ## [4.0.9] - 2026-05-10
 
 ### Fixed
