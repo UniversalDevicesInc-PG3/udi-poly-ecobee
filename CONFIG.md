@@ -24,7 +24,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | `hk_mqtt_client_slug` | MQTT | Your client’s topic segment under `…/clients/<slug>/…`; must match the MQTT topic you publish to, and **`hello.client`** (sanitized) must match this slug if you send **`client`** on hello. Default **`udi-poly-ecobee`** (this plugin’s PG3 id). **Set a unique value** if you run multiple Ecobee NS instances or other hubs’ clients on the same broker and need to avoid collisions. Same character rules as **`hk_mqtt_hub_slug`**. |
 | `use_celsius` | No | `auto`, `true`, or `false` for temperature units. Default `auto`. |
 | `dry_run` | No | `true` or `false`. When `true`, the HomeKit path logs writes instead of applying them. Default `false`. |
-| `api_key` | Cloud / PIN | Your **Ecobee developer application key** for the cloud API (required for PIN flow on **local** Polyglot; also the path if you still have a grandfathered personal key). **Not** the old UDI/Polyglot Cloud OAuth path—see **Before you start**. |
+| `api_key` | Cloud / PIN | Your **Ecobee developer application key** (used as Ecobee OAuth **`client_id`**). Required for PIN flow on **local** Polyglot. With **`backend=cloud`** and **Polyglot OAuth**, a non-empty value **overrides** the Polyglot-injected default and must be a key you registered in the Ecobee developer portal with a **redirect URI** matching Polyglot’s callback: production `https://polyglot.isy.io/api/oauth/callback`, pgtest `https://pgtest.isy.io/api/oauth/callback`. See **Before you start** for UDI/shared-key limitations. |
 
 ## Custom Typed Configuration Parameters
 

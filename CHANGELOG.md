@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.0.9] - 2026-05-10
+
+### Fixed
+
+- **Cloud OAuth:** Custom Param **`api_key`** is honored when Polyglot OAuth is enabled: a non-empty value overrides injected **`serverdata`** / nsdata keys for Ecobee **`client_id`** (authorize URL, token exchange, refresh). **`CONFIG.md`** documents Polyglot redirect URI requirements for personal developer keys. Bumps `profile/version.txt` to **4.0.9**.
+
 ## [4.0.8] - 2026-05-09
 
 ### Fixed

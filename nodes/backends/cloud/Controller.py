@@ -84,6 +84,14 @@ class CloudBackend:
         """Tear down without stopping Polyglot (backend swap)."""
         return
 
+    def _custom_api_key(self) -> str:
+        """Non-empty Ecobee developer application key from Custom Params, if set."""
+        try:
+            return str(self.Params.get('api_key', '') or '').strip()
+        except Exception:
+            LOGGER.debug('custom api_key read failed', exc_info=True)
+            return ''
+
     def handler_start(self):
         self.Notices.clear()
         LOGGER.info(f"Started Ecobee NodeServer {self.poly.serverdata['version']}")
@@ -116,7 +124,15 @@ class CloudBackend:
         self.pg_test = False
         if self.use_oauth:
             self.grant_type = 'authorization_code'
-            self.api_key    = self.serverdata['api_key']
+            uk = self._custom_api_key()
+            if uk:
+                self.api_key = uk
+                LOGGER.info('Using Ecobee API key from Custom Param (OAuth / cloud)')
+            else:
+                sk = self.serverdata.get('api_key')
+                if sk is not None and sk != '':
+                    self.api_key = sk
+            # If both Custom Param and serverdata lack a key, keep value from handler_nsdata.
             # TODO: Need a better way to tell if we are on pgtest!
             #       "logBucket": "pgc-test-logbucket-19y0vctj4zlk5",
             if self.poly.stage == 'test':
@@ -260,6 +276,9 @@ class CloudBackend:
                 self.api_key = data['api_key_oauth']
             else:
                 self.api_key = data['api_key_pin']
+            uk = self._custom_api_key()
+            if uk:
+                self.api_key = uk
         except Exception:
             LOGGER.error(f'failed to parse nsdata={data}', exc_info=True)
             self.handler_nsdata_st = False
@@ -297,8 +316,14 @@ class CloudBackend:
                 self.api_key = self.api_key_param
                 LOGGER.info(f'Got api_key from user params {self.api_key_param}')
                 if self.handler_params_st is not None:
-                    # User changed pin, do authorize
-                    self.authorize("New user pin detected, will re-authorize...")
+                    init = getattr(self.poly, 'init', None) or {}
+                    oauth = bool(isinstance(init, dict) and init.get('oauth'))
+                    msg = (
+                        'API key changed in Custom Params, will re-authorize...'
+                        if oauth
+                        else 'New user pin detected, will re-authorize...'
+                    )
+                    self.authorize(msg)
 
         self.handler_params_st = st
         LOGGER.debug(f'exit: st={st}')
@@ -387,6 +412,9 @@ class CloudBackend:
             LOGGER.debug('Init={}'.format(sdata))
             self.serverdata['api_key'] = sdata['api_key']
             self.serverdata['api_client'] = sdata['api_client']
+            uk = self._custom_api_key()
+            if uk:
+                self.api_key = uk
         else:
             url = 'https://{}/authorize?response_type=code&client_id={}&redirect_uri={}&state={}'.format(ECOBEE_API_URL,self.api_key,self.redirect_url,self.poly.init['worker'])
             msg = 'No existing Authorization found, Please <a target="_blank" href="{}">Authorize access to your Ecobee Account</a>'.format(url)
