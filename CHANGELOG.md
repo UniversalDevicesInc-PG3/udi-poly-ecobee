@@ -7,25 +7,19 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [4.1.2] - 2026-05-25
 
-Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.2**). Upload **Ecobee-beta-4.1.2.zip** to the PG3 **Beta** channel and **Ecobee-production-4.1.2.zip** to the PG3 **Production** channel.
-
 ### Fixed
 
-- **HomeKit thermostat heating setpoints (Fahrenheit):** heat writes now use the **lowest** compatible **0.1 C** bin for Ecobee display parity, which avoids the remaining **72 F -> 73 F** case on the physical thermostat. Regression coverage adds the **72 F** mapping to **tests/test_hap_apply.py**.
-- **HomeKit hub reconnect after reboot:** the Ecobee MQTT client now documents the **hello** retry schedule and keeps retrying until the hub acknowledges, so startup races with **udi-poly-homekit** no longer leave the backend disconnected after an eisy reboot. Adds **tests/test_mqtt_client_hello_retry.py**.
-- **PG3 notices:** Ecobee notice helpers now prepend a local timestamp across controller, cloud, and HomeKit notice paths so warnings in the Polyglot UI include the time they were generated. Adds **tests/test_notice_timestamps.py** and keeps smoke version checks aligned with **profile/version.txt**.
+- **HomeKit thermostat heating setpoints (Fahrenheit):** heat writes now use the **lowest** compatible **0.1 C** bin for Ecobee display parity, which avoids the remaining **72 F -> 73 F** case on the physical thermostat.
+- **HomeKit hub reconnect after reboot:** the Ecobee MQTT client now documents the **hello** retry schedule and keeps retrying until the hub acknowledges, so startup races with **udi-poly-homekit** no longer leave the backend disconnected after an eisy reboot.
+- **PG3 notices:** Ecobee notice helpers now prepend a local timestamp across controller, cloud, and HomeKit notice paths so warnings in the Polyglot UI include the time they were generated.
 
 ## [4.1.1] - 2026-05-11
 
-Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.1**). Upload **Ecobee-beta-4.1.1.zip** (or equivalent) to the PG3 **Beta** channel; production **Release** when promoted.
-
 ### Fixed
 
-- **HomeKit CT_HK editor (per thermostat):** generated **subset** was **0-11_hk_hi** because **tstatcnt** was substituted inside **tstatcnt_hk_hi**. **profile_writer** now replaces **tstatcnt_hk_hi** before **tstatcnt**, so the hold command editor is **subset="0-3"** as intended. Regression assertion in **tests/test_profile_writer.py**.
+- **HomeKit CT_HK editor (per thermostat):** generated **subset** was **0-11_hk_hi** because **tstatcnt** was substituted inside **tstatcnt_hk_hi**. **profile_writer** now replaces **tstatcnt_hk_hi** before **tstatcnt**, so the hold command editor is **subset="0-3"** as intended.
 
 ## [4.1.0] - 2026-05-10
-
-Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.0**).
 
 ### Changed
 
@@ -39,25 +33,25 @@ Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`prof
 
 ### Fixed
 
-- **Cloud OAuth:** Custom Param **`api_key`** is honored when Polyglot OAuth is enabled: a non-empty value overrides injected **`serverdata`** / nsdata keys for Ecobee **`client_id`** (authorize URL, token exchange, refresh). **`CONFIG.md`** documents Polyglot redirect URI requirements for personal developer keys. Bumps `profile/version.txt` to **4.0.9**.
+- **Cloud OAuth:** Custom Param **`api_key`** is honored when Polyglot OAuth is enabled: a non-empty value overrides injected **`serverdata`** / nsdata keys for Ecobee **`client_id`** (authorize URL, token exchange, refresh). **`CONFIG.md`** documents Polyglot redirect URI requirements for personal developer keys.
 
 ## [4.0.8] - 2026-05-09
 
 ### Fixed
 
-- **HomeKit thermostat (°F):** HAP writes use **0.1 °C** steps; naive Fahrenheit→Celsius rounding can land just **above** the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F**), and Ecobee’s display then shows **+1 °F**. **`iox_temp_to_hap_celsius`** now accepts **`fahrenheit_wire_bias`**: **low** for cooling / **CLISPC** (lowest compatible 0.1 °C bin per **`toF`**) and **high** for heating / **CLISPH**. Bumps `profile/version.txt` to **4.0.8**.
+- **HomeKit thermostat (°F):** HAP writes use **0.1 °C** steps; naive Fahrenheit→Celsius rounding can land just **above** the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F**), and Ecobee’s display then shows **+1 °F**. **`iox_temp_to_hap_celsius`** now accepts **`fahrenheit_wire_bias`**: **low** for cooling / **CLISPC** (lowest compatible 0.1 °C bin per **`toF`**) and **high** for heating / **CLISPH**.
 
 ## [4.0.7] - 2026-05-09
 
 ### Fixed
 
-- **HomeKit thermostat (auto):** use **3 °F** (and **5/3 °C** for Celsius nodedefs) minimum heat/cool span when co-writing HAP thresholds so Ecobee’s compressor minimum delta is satisfied on the wire. Previously a **1 °F** slack let HomeKit writes succeed while the stat raised the cooling setpoint (e.g. **72 → 73** when heat was **70**). Bumps `profile/version.txt` to **4.0.7**.
+- **HomeKit thermostat (auto):** use **3 °F** (and **5/3 °C** for Celsius nodedefs) minimum heat/cool span when co-writing HAP thresholds so Ecobee’s compressor minimum delta is satisfied on the wire. Previously a **1 °F** slack let HomeKit writes succeed while the stat raised the cooling setpoint (e.g. **72 → 73** when heat was **70**).
 
 ## [4.0.6] - 2026-05-08
 
 ### Fixed
 
-- **Profile NLS (Profile Change):** add missing remote-sensor driver names for the `140ES` editor — **CLIHUM** (`Humidity`), **BATLVL** (`Battery Level`), and **BATLOW** (`Battery Low`). The `EcobeeSensor*` nodedefs publish all three but the IoX UI was rendering them without labels. Bumps `profile/version.txt` to **4.0.6**.
+- **Profile NLS (Profile Change):** add missing remote-sensor driver names for the `140ES` editor — **CLIHUM** (`Humidity`), **BATLVL** (`Battery Level`), and **BATLOW** (`Battery Low`). The `EcobeeSensor*` nodedefs publish all three but the IoX UI was rendering them without labels.
 
 ## [4.0.5] - 2026-05-08
 
@@ -69,7 +63,7 @@ Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`prof
 
 ### Fixed
 
-- **Profile NLS (Profile Change):** add missing controller names for **GV4** (`HomeKit WebSocket`) / **GV5** (`HomeKit MQTT`) HomeKit transport status drivers and **HKTR** enum labels (`Not Selected` / `Not Connected` / `Connected`) used by the `hktr` editor. Bumps `profile/version.txt` to **4.0.4**.
+- **Profile NLS (Profile Change):** add missing controller names for **GV4** (`HomeKit WebSocket`) / **GV5** (`HomeKit MQTT`) HomeKit transport status drivers and **HKTR** enum labels (`Not Selected` / `Not Connected` / `Connected`) used by the `hktr` editor.
 
 ## [4.0.3] - 2026-05-08
 
@@ -83,7 +77,6 @@ Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`prof
 ### Changed
 
 - **HomeKit backend:** `dry_run` now defaults to **`false`** so thermostat commands are sent to the HomeKit hub by default. Set Custom Param **`dry_run`** to **`true`** to restore log-only command behavior.
-- **Release workflow:** Makefile now matches udi-poly-homekit with **`release`**, **`beta`**, and **`production`** targets that push track refs and build PG3 upload zips.
 
 ### Fixed
 
@@ -110,13 +103,11 @@ Major release: **HomeKit hub integration** with [udi-poly-homekit](https://githu
 - **HomeKit backend** — WebSocket client to the udi-poly-homekit hub (hello `ack` pairing list, multiplexed `command` / `snapshot` / `get` RPC, hub `warnings` mirrored to PG3 Notices).
 - **PG3 Notice `homekit_hub_unreachable`** — when the hub WebSocket fails (connection or hello), with guidance to install and configure udi-poly-homekit and set `hk_ws_url` / `hk_ws_token`.
 - **`default_backend_for_new_param_seed`** — when Custom Param `backend` is missing, seed **`homekit`** for a fresh nodeserver and **`cloud`** when OAuth, non-empty `api_key`, Ecobee `tokenData` / PIN in customdata, or existing non-controller nodes indicate a legacy cloud install.
-- **This `CHANGELOG.md`** — release history moved from `README.md`.
 
 ### Changed
 
 - **Documentation (`README.md`, `CONFIG.md`)** — install/configure udi-poly-homekit first; Ecobee/UDI shared cloud API access is discontinued; cloud only viable with a personal developer key obtained before Ecobee disabled UDI keys.
 - **WebSocket client** — pairing list always taken from hello `ack` `devices[]` (including empty); clear cached devices on new connection; optional `on_transport_error` callback; no reliance on an automatic second `list_devices` frame from the hub.
-- **Profile / version** — align store profile version with **4.0.0**.
 
 ### Fixed
 
