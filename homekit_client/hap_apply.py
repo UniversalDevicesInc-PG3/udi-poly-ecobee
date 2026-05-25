@@ -317,8 +317,8 @@ def iox_temp_to_hap_celsius(
     the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F** exact). Ecobee’s UI
     then rounds **up**, so the user sees **76 °F** while IoX sent **75**. Mitigate by choosing a
     0.1 °C bin that still maps back to the same whole °F via :func:`node_funcs.toF` (used on
-    inbound HAP), preferring the **lowest** bin for cooling and the **highest** for heating so
-    compressor-side display rules do not drift **CLISPC** / **CLISPH** by +1 °F.
+    inbound HAP). In practice the **lowest** compatible bin is safest for Ecobee display parity;
+    the optional **high** bias is kept available for troubleshooting / alternate accessories.
     """
     if node.use_celsius:
         c = float(driver_val)

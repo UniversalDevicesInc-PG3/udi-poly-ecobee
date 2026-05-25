@@ -32,7 +32,14 @@ from homekit_client.profile_writer import (
     profile_needs_update,
     write_ecobee_climate_profile,
 )
-from node_funcs import climateList, customdata_load_payload, customdata_user_snapshot, get_profile_info, get_valid_node_name
+from node_funcs import (
+    climateList,
+    customdata_load_payload,
+    customdata_user_snapshot,
+    get_profile_info,
+    get_valid_node_name,
+    notice_html_with_timestamp,
+)
 from params_flat import DEFAULT_EFFECTIVE
 
 from .Sensor import HomeKitSensor
@@ -123,6 +130,10 @@ class HomeKitBackend:
         self._hk_active_transport: Optional[str] = None
         self._hk_last_transport_snap: Optional[Dict[str, str]] = None
         self._hk_last_disconnect_notice_monotonic: float = 0.0
+        self._unknown_char_notice_lines: List[str] = []
+
+    def _set_notice_html(self, key: str, body_html: str) -> None:
+        self.Notices[key] = notice_html_with_timestamp(body_html)
 
     def _pg3_warn_and_notice(
         self,
@@ -142,10 +153,11 @@ class HomeKitBackend:
         if not emit_notice:
             return
         try:
-            self.Notices[notice_key] = (
+            self._set_notice_html(
+                notice_key,
                 f'<p><b>{html.escape(title)}</b></p>'
                 f'{notice_html}'
-                '<p>See the Node Server log for details.</p>'
+                '<p>See the Node Server log for details.</p>',
             )
         except Exception:
             LOGGER.exception('HomeKit: failed to set PG3 Notice %r', notice_key)
@@ -292,9 +304,10 @@ class HomeKitBackend:
         """Refresh HomeKit notices that depend on flat params (e.g. dry_run)."""
         dr = str(self.dispatcher.effective_params.get('dry_run', 'false')).strip().lower()
         if dr == 'true':
-            self.Notices['homekit_dry_run'] = (
+            self._set_notice_html(
+                'homekit_dry_run',
                 'HomeKit <b>dry_run</b> is enabled: commands to the hub are logged only, not sent. '
-                'Set Custom Param <code>dry_run</code> to <code>false</code> to allow writes.'
+                'Set Custom Param <code>dry_run</code> to <code>false</code> to allow writes.',
             )
         else:
             try:
@@ -335,6 +348,7 @@ class HomeKitBackend:
     def handler_start(self):
         self.Notices.clear()
         self._unknown_char_logged.clear()
+        self._unknown_char_notice_lines.clear()
         LOGGER.info('Started Ecobee NodeServer (HomeKit backend) %s', self.poly.serverdata.get('version'))
         cnt = 10
         while (
@@ -484,9 +498,10 @@ class HomeKitBackend:
             except Exception:
                 pass
             return
-        self.Notices['homekit_hub_warnings'] = (
+        self._set_notice_html(
+            'homekit_hub_warnings',
             '<p>From <b>udi-poly-homekit</b> hub (<code>warnings</code> in PROTOCOL):</p>'
-            + '<br/>'.join(lines)
+            + '<br/>'.join(lines),
         )
 
     def _on_ws_connected(self, transport: Optional[str] = None, generation: Optional[int] = None) -> None:
@@ -868,13 +883,14 @@ class HomeKitBackend:
             if len(blob) > 4500:
                 blob = blob[:4500] + '\n…'
             safe = html.escape(blob)
-            self.Notices['homekit_no_thermostat'] = (
+            self._set_notice_html(
+                'homekit_no_thermostat',
                 '<p><b>HomeKit</b>: could not derive a thermostat from hub <code>list_devices</code>. '
                 'Each row needs a non-empty <code>device_id</code> and either pairing-level HAP '
                 '<b>category</b> 9 / <code>category_label</code> THERMOSTAT, or per-aid summaries in '
                 '<code>accessories[]</code> (category 9, THERMOSTAT, or <code>thermostat_like</code>). '
                 'Update <b>udi-poly-homekit</b> if metadata is incomplete; see hub PROTOCOL.</p>'
-                f'<pre style="white-space:pre-wrap">{safe}</pre>'
+                f'<pre style="white-space:pre-wrap">{safe}</pre>',
             )
         except Exception:
             LOGGER.exception('homekit_no_thermostat notice failed')
@@ -1381,17 +1397,13 @@ class HomeKitBackend:
             return
         self._unknown_char_logged.add(key)
         LOGGER.warning('HomeKit unmapped characteristic: %s', key)
-        try:
-            prev = self.Notices['homekit_unknown_chars']
-        except Exception:
-            prev = None
         line = f'Unmapped HAP characteristic: <code>{key}</code>'
-        if prev:
-            self.Notices['homekit_unknown_chars'] = str(prev) + '<br/>' + line
-        else:
-            self.Notices['homekit_unknown_chars'] = (
-                'Some hub characteristics are not mapped to IoX drivers yet:<br/>' + line
-            )
+        self._unknown_char_notice_lines.append(line)
+        self._set_notice_html(
+            'homekit_unknown_chars',
+            'Some hub characteristics are not mapped to IoX drivers yet:<br/>'
+            + '<br/>'.join(self._unknown_char_notice_lines),
+        )
 
     def hub_command(self, device_id: str, characteristic: str, value: Any) -> bool:
         did = str(device_id or '').strip().lower()

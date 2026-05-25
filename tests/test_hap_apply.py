@@ -122,6 +122,7 @@ def test_iox_temp_to_hap_fahrenheit_low_bias_picks_min_tenth_c():
     """Cooling: lowest 0.1 °C bin with same ``toF`` as target (avoids Ecobee UI +1 °F)."""
     node = MagicMock()
     node.use_celsius = False
+    assert iox_temp_to_hap_celsius(node, 72, fahrenheit_wire_bias='low') == 22.0
     assert iox_temp_to_hap_celsius(node, 75, fahrenheit_wire_bias='low') == 23.7
     assert iox_temp_to_hap_celsius(node, 74, fahrenheit_wire_bias='low') == 23.1
     assert iox_temp_to_hap_celsius(node, 73, fahrenheit_wire_bias='low') == 22.6

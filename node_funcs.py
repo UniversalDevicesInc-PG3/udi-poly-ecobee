@@ -2,6 +2,8 @@
 import os
 import re
 import json
+from datetime import datetime
+from html import escape
 from typing import Any, Dict, Optional
 
 # Keys internal to udi_interface.Custom (see site-packages/udi_interface/custom.py dump()).
@@ -43,6 +45,41 @@ def customdata_load_payload(data: Any) -> Optional[Dict[str, Any]]:
         if isinstance(inner, dict):
             return {k: v for k, v in inner.items() if k not in _CUSTOM_INTERNAL_KEYS}
     return {k: v for k, v in data.items() if k not in _CUSTOM_INTERNAL_KEYS}
+
+
+def notice_timestamp_text(now: Optional[datetime] = None) -> str:
+    """Local timestamp string for PG3 notices."""
+    dt = now if now is not None else datetime.now().astimezone()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return dt.isoformat(sep=' ', timespec='seconds')
+
+
+def notice_html_with_timestamp(
+    body_html: str,
+    *,
+    label: str = 'Timestamp',
+    now: Optional[datetime] = None,
+) -> str:
+    """Prepend a timestamp paragraph to an HTML PG3 notice body."""
+    return (
+        f'<p><b>{escape(label)}:</b> <code>{escape(notice_timestamp_text(now))}</code></p>'
+        f'{body_html}'
+    )
+
+
+def notice_text_with_timestamp(
+    message: str,
+    *,
+    label: str = 'Timestamp',
+    now: Optional[datetime] = None,
+) -> str:
+    """Wrap plain text as HTML and prepend a timestamp for PG3 notices."""
+    return notice_html_with_timestamp(
+        f'<p>{escape(str(message or ""))}</p>',
+        label=label,
+        now=now,
+    )
 
 
 def ltom(list):

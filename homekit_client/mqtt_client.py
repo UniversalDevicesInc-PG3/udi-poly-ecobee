@@ -20,6 +20,9 @@ DEFAULT_COMMAND_RPC_TIMEOUT_SEC = 30.0
 ROOT = "udi/homekit/hubs"
 
 BackoffSchedule = (1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
+# Seconds between MQTT ``hello`` retries after the initial publish. Once the schedule is exhausted,
+# the last value is reused indefinitely (so this becomes every 60 seconds until ack / stop / drop).
+HelloRetrySchedule = (2.0, 5.0, 10.0, 30.0, 60.0)
 
 
 def _norm_rpc_id(value: Any) -> Optional[str]:
@@ -331,9 +334,17 @@ class HubMqttClient:
                 self._event_topic,
             )
             await self._send_hello()
+            hello_retry_task = asyncio.create_task(self._hello_retry_loop())
             try:
                 await self._read_loop(client)
             finally:
+                hello_retry_task.cancel()
+                try:
+                    await hello_retry_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    self._log.warning("HomeKit hub MQTT hello retry loop failed", exc_info=True)
                 self._mqtt_pub = None
                 self._hello_ok.clear()
                 self._finish_all_pending(RuntimeError("connection closed"))
@@ -356,6 +367,42 @@ class HubMqttClient:
             "client": self._client_id,
         }
         await self._send_json(msg)
+
+    async def _hello_retry_loop(self, schedule: Optional[tuple[float, ...]] = None) -> None:
+        """
+        Retry ``hello`` on the same broker session until the hub acks it.
+
+        This covers the startup race where Ecobee connects to MQTT first and the hub subscribes to
+        ``.../clients/+/in`` a few seconds later, so the first ``hello`` is missed.
+
+        ``schedule`` entries are delays in seconds between retries. If the hub still has not acked
+        after the last entry, the loop keeps retrying forever using that last delay value.
+        """
+        delays = tuple(float(x) for x in (schedule or HelloRetrySchedule) if float(x) >= 0.0)
+        if not delays:
+            delays = (5.0,)
+        retry_num = 0
+        while not self._stop.is_set() and not self._hello_ok.is_set():
+            delay = delays[min(retry_num, len(delays) - 1)]
+            retry_num += 1
+            waited = 0.0
+            while waited < delay:
+                if self._stop.is_set() or self._hello_ok.is_set() or self._mqtt_pub is None:
+                    return
+                slice_s = min(0.1, delay - waited)
+                await asyncio.sleep(slice_s)
+                waited += slice_s
+            if self._stop.is_set() or self._hello_ok.is_set() or self._mqtt_pub is None:
+                return
+            self._log.info(
+                "HomeKit hub MQTT: hello ack not received yet; retrying hello (%s)",
+                retry_num,
+            )
+            try:
+                await self._send_hello()
+            except Exception as err:
+                self._log.warning("HomeKit hub MQTT: hello retry publish failed: %s", err)
+                return
 
     async def _send_snapshot(self, device_id: str, rid: str) -> None:
         try:

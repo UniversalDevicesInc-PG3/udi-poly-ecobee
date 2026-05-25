@@ -11,7 +11,12 @@ import markdown2
 from udi_interface import LOG_HANDLER, LOGGER, Custom, Node
 
 from const import driversMap
-from node_funcs import customdata_load_payload, customdata_user_snapshot
+from node_funcs import (
+    customdata_load_payload,
+    customdata_user_snapshot,
+    notice_html_with_timestamp,
+    notice_text_with_timestamp,
+)
 from nodes.backends.cloud.Controller import CloudBackend
 from params_flat import (
     DEFAULT_EFFECTIVE,
@@ -267,6 +272,12 @@ class Controller(Node):
         self._backend.handler_start()
         self._backend_poly_start_applied = True
 
+    def _set_notice_html(self, key: str, body_html: str) -> None:
+        self.Notices[key] = notice_html_with_timestamp(body_html)
+
+    def _set_notice_text(self, key: str, message: str) -> None:
+        self.Notices[key] = notice_text_with_timestamp(message)
+
     # --- Polyglot handlers ---
 
     def handler_start(self):
@@ -324,7 +335,7 @@ class Controller(Node):
         self._ensure_default_custom_params()
         bad = self._validate_params()
         if bad:
-            self.Notices['homekit_bad_param'] = bad
+            self._set_notice_html('homekit_bad_param', bad)
         else:
             self.Notices.delete('homekit_bad_param')
         self._custom_params_loaded = True
@@ -332,9 +343,12 @@ class Controller(Node):
         self._ensure_backend()
         self._flush_pending_config_to_backend()
         if prev_kind is not None and prev_kind != self._active_backend_kind:
-            self.Notices['homekit_backend_changed'] = (
-                f'Backend changed from {prev_kind} to {self._active_backend_kind}. '
-                'Node behavior follows the new backend after this reload cycle.'
+            self._set_notice_text(
+                'homekit_backend_changed',
+                (
+                    f'Backend changed from {prev_kind} to {self._active_backend_kind}. '
+                    'Node behavior follows the new backend after this reload cycle.'
+                ),
             )
         if self._backend:
             self._backend.handler_params(params)

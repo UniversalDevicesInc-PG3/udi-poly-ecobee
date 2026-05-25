@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_nodes_package_exports():
     from nodes import VERSION, Controller
 
     assert Controller is not None
-    assert VERSION == '4.0.1'
+    assert VERSION == (ROOT / 'profile' / 'version.txt').read_text(encoding='utf-8').strip()
 
 
 def test_import_dispatcher_class():

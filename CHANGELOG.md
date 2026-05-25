@@ -5,7 +5,15 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.1.2] - 2026-05-25
+
+Store **Version** (PG3) must match **`nodes/__init__.py` `VERSION`** and **`profile/version.txt`** (**4.1.2**). Upload **Ecobee-beta-4.1.2.zip** to the PG3 **Beta** channel and **Ecobee-production-4.1.2.zip** to the PG3 **Production** channel.
+
+### Fixed
+
+- **HomeKit thermostat heating setpoints (Fahrenheit):** heat writes now use the **lowest** compatible **0.1 C** bin for Ecobee display parity, which avoids the remaining **72 F -> 73 F** case on the physical thermostat. Regression coverage adds the **72 F** mapping to **tests/test_hap_apply.py**.
+- **HomeKit hub reconnect after reboot:** the Ecobee MQTT client now documents the **hello** retry schedule and keeps retrying until the hub acknowledges, so startup races with **udi-poly-homekit** no longer leave the backend disconnected after an eisy reboot. Adds **tests/test_mqtt_client_hello_retry.py**.
+- **PG3 notices:** Ecobee notice helpers now prepend a local timestamp across controller, cloud, and HomeKit notice paths so warnings in the Polyglot UI include the time they were generated. Adds **tests/test_notice_timestamps.py** and keeps smoke version checks aligned with **profile/version.txt**.
 
 ## [4.1.1] - 2026-05-11
 

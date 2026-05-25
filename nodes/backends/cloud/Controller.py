@@ -84,6 +84,12 @@ class CloudBackend:
         """Tear down without stopping Polyglot (backend swap)."""
         return
 
+    def _set_notice_text(self, key, message):
+        self.Notices[key] = notice_text_with_timestamp(message)
+
+    def _set_notice_html(self, key, body_html):
+        self.Notices[key] = notice_html_with_timestamp(body_html)
+
     def _custom_api_key(self) -> str:
         """Non-empty Ecobee developer application key from Custom Params, if set."""
         try:
@@ -260,7 +266,7 @@ class CloudBackend:
             if data is None:
                 msg = "No NSDATA Returned by Polyglot"
                 LOGGER.error(msg)
-                self.Notices['nsdata'] = msg
+                self._set_notice_text('nsdata', msg)
                 self.handler_nsdata_st = False
                 return
 
@@ -343,9 +349,9 @@ class CloudBackend:
         if self.api_key is None:
             msg = "api_key is not defined, must be running local version or there was an error retreiving it from PG3? Must fix or add custom param for local"
             LOGGER.error(msg)
-            self.Notices['authorize'] = msg
+            self._set_notice_text('authorize', msg)
             return
-        self.Notices['authorize'] = message
+        self._set_notice_text('authorize', message)
         if self.use_oauth is True:
             self._getOAuth()
         else:
@@ -376,12 +382,12 @@ class CloudBackend:
         if 'ecobeePin' in res_data:
             msg = 'Please <a target="_blank" href="https://www.ecobee.com/consumerportal/">Signin to your Ecobee account</a>. Click on Profile > My Apps > Add Application and enter PIN: <b>{}</b> You have 10 minutes to complete this. The NodeServer will check every 60 seconds.'.format(res_data['ecobeePin'])
             LOGGER.info(f'_getPin: {msg}')
-            self.Notices[f'getPin'] = msg
+            self._set_notice_html('getPin', msg)
             # This will tell shortPoll to check for PIN
             self.waiting_on_tokens = res_data
         else:
             msg = f'ecobeePin Failed code={res_code}: {res_data}'
-            self.Notices['getPin'] = msg
+            self._set_notice_text('getPin', msg)
 
     def _getOAuthInit(self):
         """
@@ -418,7 +424,7 @@ class CloudBackend:
         else:
             url = 'https://{}/authorize?response_type=code&client_id={}&redirect_uri={}&state={}'.format(ECOBEE_API_URL,self.api_key,self.redirect_url,self.poly.init['worker'])
             msg = 'No existing Authorization found, Please <a target="_blank" href="{}">Authorize access to your Ecobee Account</a>'.format(url)
-            self.Notices['oauth'] = msg
+            self._set_notice_html('oauth', msg)
             LOGGER.warning(msg)
             self.waiting_on_tokens = "OAuth"
 
@@ -505,7 +511,10 @@ class CloudBackend:
                 # https://www.ecobee.com/home/developer/api/documentation/v1/auth/auth-req-resp.shtml
                 if 'error' in res_data:
                     self.set_ecobee_st(False)
-                    self.Notices['grant_error'] = f"{res_data['error']}: {res_data['error_description']}"
+                    self._set_notice_text(
+                        'grant_error',
+                        f"{res_data['error']}: {res_data['error_description']}",
+                    )
                     #self.addNotice({'grant_info': "For access_token={} refresh_token={} expires={}".format(self.tokenData['access_token'],self.tokenData['refresh_token'],self.tokenData['expires'])})
                     LOGGER.error('Requesting Auth: {} :: {}'.format(res_data['error'], res_data['error_description']))
                     LOGGER.error('For access_token={} refresh_token={} expires={}'.format(self.tokenData['access_token'],self.tokenData['refresh_token'],self.tokenData['expires']))
@@ -518,11 +527,11 @@ class CloudBackend:
                         else:
                             if exp_d.total_seconds() > 0:
                                 msg = "But token still has {} seconds to expire, so assuming this is an Ecobee server issue and will try to refresh on next poll...".format(exp_d.total_seconds())
-                                self.Notices['grant_info_2'] = msg
+                                self._set_notice_text('grant_info_2', msg)
                                 LOGGER.error(msg)
                             else:
                                 msg = "Token expired {} seconds ago, so will have to re-auth...".format(exp_d.total_seconds())
-                                self.Notices['grant_info_2'] = msg
+                                self._set_notice_text('grant_info_2', msg)
                                 LOGGER.error(msg)
                                 # May need to remove the re-auth requirement because we get these and they don't seem to be real?
                                 self._reAuth(f"{res_data['error']} and Token expired")
@@ -572,14 +581,14 @@ class CloudBackend:
                 LOGGER.error('_getTokens: {}'.format(msg))
                 self.waiting_on_tokens = False
                 self.Notices.clear()
-                self.Notices['getTokens'] = msg
+                self._set_notice_text('getTokens', msg)
                 self.exit()
             return False
         if 'access_token' in res_data:
             self.waiting_on_tokens = False
             LOGGER.debug('Got tokens sucessfully.')
             self.Notices.clear()
-            self.Notices['getTokens'] = 'Tokens obtained!'
+            self._set_notice_text('getTokens', 'Tokens obtained!')
             # Save pin_code
             if not self.Data.get('pin_code') != pinData['code']:
                self.Data['pin_code'] = pinData['code']

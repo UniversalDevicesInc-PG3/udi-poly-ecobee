@@ -62,7 +62,10 @@ class Thermostat(Node):
                           fonode = None
                           LOGGER.debug("caught getNode fail due to polyglot cloud bug? assuming old node not found")
                         if fonode is not None:
-                            self.controller.Notices[fonode['address']] = f"Sensor created with new name, please delete old sensor with address '{fonode['address']}' in the Polyglot UI."
+                            self.controller._set_notice_text(
+                                fonode['address'],
+                                f"Sensor created with new name, please delete old sensor with address '{fonode['address']}' in the Polyglot UI.",
+                            )
                         addS = False
                         # Add Sensor is necessary
                         # Did the nodedef id change?

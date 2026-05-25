@@ -145,7 +145,7 @@ class HomeKitThermostat(Node):
                 if cool < heat + span:
                     cool = heat + span
                 hv = hap_apply.iox_temp_to_hap_celsius(
-                    self, heat, fahrenheit_wire_bias='high'
+                    self, heat, fahrenheit_wire_bias='low'
                 )
                 cv = hap_apply.iox_temp_to_hap_celsius(
                     self, cool, fahrenheit_wire_bias='low'
@@ -158,7 +158,7 @@ class HomeKitThermostat(Node):
                 return
             c = self._hap_char_for_heat_driver_write()
             v = hap_apply.iox_temp_to_hap_celsius(
-                self, heat, fahrenheit_wire_bias='high'
+                self, heat, fahrenheit_wire_bias='low'
             )
             if self._hub_write(c, v):
                 self.set_clisph(heat)
@@ -171,7 +171,7 @@ class HomeKitThermostat(Node):
                 if heat > cool - span:
                     heat = cool - span
                 hv = hap_apply.iox_temp_to_hap_celsius(
-                    self, heat, fahrenheit_wire_bias='high'
+                    self, heat, fahrenheit_wire_bias='low'
                 )
                 cv = hap_apply.iox_temp_to_hap_celsius(
                     self, cool, fahrenheit_wire_bias='low'
@@ -234,7 +234,7 @@ class HomeKitThermostat(Node):
             if cool < heat + min_span:
                 cool = heat + min_span
             hv = hap_apply.iox_temp_to_hap_celsius(
-                self, heat, fahrenheit_wire_bias='high'
+                self, heat, fahrenheit_wire_bias='low'
             )
             cv = hap_apply.iox_temp_to_hap_celsius(
                 self, cool, fahrenheit_wire_bias='low'
@@ -247,7 +247,7 @@ class HomeKitThermostat(Node):
             cur = float(self.getDriver('CLISPH'))
             nxt = cur + step
             v = hap_apply.iox_temp_to_hap_celsius(
-                self, nxt, fahrenheit_wire_bias='high'
+                self, nxt, fahrenheit_wire_bias='low'
             )
             if self._hub_write(t_t, v):
                 self.set_clisph(nxt)
