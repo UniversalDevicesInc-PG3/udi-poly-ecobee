@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **User setup docs:** restructured **CONFIG.md** as the primary HomeKit setup guide with step-by-step quick start, hub/Ecobee defaults checklist, verify/troubleshooting sections, and **Reference: HomeKit behavior vs cloud** (moved from README). **README.md** trimmed to help links and CONFIG pointers.
+
 ## [4.1.2] - 2026-05-25
 
 ### Fixed

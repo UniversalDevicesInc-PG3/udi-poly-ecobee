@@ -1,47 +1,183 @@
 # Ecobee Node Server — configuration
 
-## Before you start
+**Start here.** This file is the main setup guide for new **HomeKit hub** installations.
 
-1. **Install and configure [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) first** (PG3 store): pair your Ecobee(s), then enable the hub **MQTT** transport (`mqtt_enable` and broker settings in that plugin; see its **PROTOCOL.md**). **MQTT is the preferred transport** for new installs and is the default of **`hk_transport`** here — point both plugins at the same broker and matching `*_hub_slug`. **WebSocket** (`ws_host` / `ws_port` and optional `ws_token`) remains supported as a fallback when MQTT is not available. This nodeserver’s HomeKit mode talks to that hub only; it does not replace it.
-2. **Missing `backend` param:** the plugin **seeds** a default once: **`homekit`** for a fresh NS (no OAuth, no `api_key`, no saved Ecobee tokens/PIN in customdata, no extra nodes yet); **`cloud`** if Polyglot OAuth is enabled for this NS, **`api_key`** is set, customdata has **`tokenData`** / **`pin_code`**, or the NS already has nodes besides the controller (legacy upgrade). If **`backend`** is **already stored** in PG3, it is never changed by seeding.
-3. **Ecobee cloud (REST API):** Ecobee has **cut off UDI / Polyglot Cloud access** for this integration. **Cloud mode only remains viable** if you use **your own Ecobee developer application key** that you registered **before** Ecobee stopped honoring requests for the old shared keys, and you configure **`api_key`** / PIN flow as documented for **local** Polyglot. Do not rely on historical OAuth or UDI-provided keys for new setups.
+---
 
-## Custom Configuration Parameters
+## Prerequisites
 
-Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every row appears in the editor; adjust values and save.
+1. **Install and pair on [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) first** — follow its [CONFIG.md — Ecobee + IoX quick start](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit/blob/master/CONFIG.md#ecobee--iox-quick-start). Your Ecobee must be paired on that hub and **not** left paired only to Apple Home.
+2. This Node Server does **not** replace the HomeKit hub; it connects to it over **MQTT** (default) or **WebSocket**.
+
+**Ecobee cloud (REST API):** Ecobee has cut off UDI / Polyglot Cloud OAuth for this integration. **New setups should use HomeKit hub mode.** Cloud mode only remains viable with a **personal Ecobee developer `api_key`** you registered before shared keys stopped working — see [Cloud backend (legacy)](#cloud-backend-legacy) below.
+
+---
+
+## Ecobee quick start (HomeKit)
+
+1. Complete [HomeKit hub pairing](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit/blob/master/CONFIG.md#ecobee--iox-quick-start) first. Confirm hub **GV0** = `1` and **GV1** = `2` (MQTT connected).
+2. Add **Ecobee** from the PG3 store and start the Node Server.
+3. Open **Configuration** → **Custom Configuration Parameters**.
+4. On a **fresh install** you should see:
+   - **`backend`** = `homekit` (seeded automatically)
+   - **`hk_transport`** = `mqtt` (preferred default)
+5. Confirm these match your HomeKit hub (see [Defaults checklist](#defaults-checklist) below). On a typical Polisy/eISY install, **do not change them** — just **Save**.
+6. On the **Ecobee Controller** node, within about a minute:
+   - **GV1** (Ecobee Connection Status) = **true** when hello to the hub succeeded
+   - **GV5** (HomeKit MQTT) = **2** (Connected) when using MQTT
+7. Thermostat nodes (`t…`) and remote sensor nodes (`rs…`) should appear. If not, see [Verify success](#verify-success) and [Troubleshooting](#troubleshooting).
+
+**`backend` seeding:** If **`backend`** is missing, the plugin sets it once: **`homekit`** for a brand-new NS; **`cloud`** only when OAuth, **`api_key`**, saved Ecobee tokens/PIN, or existing thermostat nodes indicate a legacy install. A value already stored in PG3 is never overwritten.
+
+---
+
+## Defaults checklist
+
+On a typical single-hub Polisy/eISY install, these values should already match. Change only if you use a non-default broker or multiple hubs.
+
+| HomeKit hub param | Ecobee param | Typical value |
+|-------------------|--------------|---------------|
+| `mqtt_enable` = `true` | `hk_transport` = `mqtt` | MQTT enabled on both sides |
+| `mqtt_host` | `hk_mqtt_host` | `localhost` |
+| `mqtt_port` | `hk_mqtt_port` | `1884` |
+| `mqtt_hub_slug` | `hk_mqtt_hub_slug` | `default` |
+
+**WebSocket fallback:** set **`hk_transport`** to **`websocket`**, **`hk_ws_url`** to e.g. `ws://127.0.0.1:8163`, and optionally **`hk_ws_token`** if the hub requires it. Enable MQTT on the hub is still recommended for production.
+
+Saving Custom Params after changing **`hk_transport`** or any **`hk_ws_*` / `hk_mqtt_*`** field restarts the hub client immediately (no full Node Server restart required).
+
+---
+
+## Verify success
+
+On the **Ecobee Controller** node (HomeKit mode):
+
+| Driver | Good value | Meaning |
+|--------|------------|---------|
+| **GV1** | `true` | Active transport completed hello to the hub. |
+| **GV5** | `2` | MQTT connected (when **`hk_transport`** is `mqtt`). |
+| **GV4** | `2` | WebSocket connected (only when **`hk_transport`** is `websocket`). |
+| **GV3** | reflects hub | Hub reported paired devices. |
+
+**Healthy signs:** thermostat nodes (`t…`) and sensors (`rs…`) in IoX; no persistent **Notices** named **`homekit_hub_unreachable`**, **`homekit_no_thermostat`**, or **`homekit_hub_warnings`**.
+
+**Logs:** `logs/debug.log` records **INFO** when the client starts and when **hello** succeeds; **WARNING** on transport problems.
+
+**Notices:**
+
+- **`homekit_hub_unreachable`** — cannot connect or hello failed; check hub is running and slug/host/port match.
+- **`homekit_hub_disconnected`** — session dropped while retrying (deduped in UI about every 45 seconds).
+- **`homekit_hub_warnings`** — structured warnings from the hub (see udi-poly-homekit **PROTOCOL.md**).
+- **`homekit_no_thermostat`** — hub sent devices but none became a thermostat node (includes JSON snapshot).
+
+---
+
+## Optional settings
+
+- **`use_celsius`**: `auto`, `true`, or `false`. Default `auto`.
+- **`dry_run`**: default **`false`**. Set **`true`** to log commands without sending them; Notice **`homekit_dry_run`** reminds you.
+- **`hk_mqtt_client_slug`**: default **`udi-poly-ecobee`**. Set a unique value only if multiple Ecobee NS instances share one broker.
+- **Custom Typed Params** (address overrides, climate labels): only needed for advanced installs — see [Reference: Typed params](#reference-custom-typed-configuration-parameters).
+
+---
+
+## Troubleshooting
+
+### Ecobee NS starts but no thermostats appear
+
+1. Confirm **udi-poly-homekit** has the Ecobee paired (child node **ST** = paired on the hub).
+2. Confirm hub **GV0** = `1` and **GV1** = `2`.
+3. Confirm **`hk_mqtt_hub_slug`** matches hub **`mqtt_hub_slug`** (usually both `default`).
+4. Check Notice **`homekit_no_thermostat`** and hub **`homekit_hub_warnings`**.
+
+### `homekit_hub_unreachable` after reboot
+
+The Ecobee client retries hello until the hub is up. If it persists more than a few minutes, restart the **HomeKit Hub** Node Server first, then Ecobee. Confirm MQTT broker on port **1884** is available on the Polisy/eISY.
+
+### Wrong backend (`cloud` instead of `homekit`)
+
+If this is a **new** HomeKit install but **`backend`** shows `cloud`, you may be upgrading a legacy NS. Set **`backend`** to **`homekit`** manually and **Save**, or remove and re-add the Node Server on a clean install. See seeding rules under [Ecobee quick start](#ecobee-quick-start-homekit).
+
+### Slug or broker mismatch
+
+**`hk_mqtt_hub_slug`** must exactly match the hub's **`mqtt_hub_slug`**. **`hk_mqtt_host`** / **`hk_mqtt_port`** must reach the same broker the hub uses.
+
+---
+
+## Reference: Custom Configuration Parameters
+
+Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every row appears in the editor.
 
 | Parameter | Required | Description |
 | --------- | -------- | ----------- |
-| `backend` | No | **`homekit`** or **`cloud`**. If the key is missing, the plugin seeds **`homekit`** for a fresh NS and **`cloud`** when OAuth, **`api_key`**, Ecobee tokens/PIN in customdata, or other nodes besides the controller indicate a legacy install (**Before you start**). Saved values are never overwritten by seeding. **`cloud`**: only realistic with a **personal developer `api_key`** (UDI cloud OAuth is not available for new users). |
-| `hk_transport` | No | **`mqtt`** (default, **preferred**) or **`websocket`** (fallback). When **`mqtt`**, populate **`hk_mqtt_*`** and enable MQTT on the hub; **`hk_ws_url`** is not validated until you switch to WebSocket. **Saving** Custom Params after changing **`hk_transport`** or any **`hk_ws_*` / `hk_mqtt_*`** field **restarts** the hub client immediately (no Node Server restart required). **`logs/debug.log`** records **INFO** lines when the client starts and when **hello** succeeds. |
-| `hk_ws_url` | For HomeKit (WS fallback) | WebSocket URL of the **udi-poly-homekit** hub, e.g. `ws://127.0.0.1:8163`. Used when **`hk_transport`** is **`websocket`** and **`backend`** is **`homekit`**. |
-| `hk_ws_token` | No | Optional bearer / hello token if the hub requires auth (**WebSocket only**; MQTT v1 has no application-level secret on the hub). |
-| `hk_mqtt_host` | MQTT | Broker hostname or IP. Default `localhost`. |
-| `hk_mqtt_port` | MQTT | Broker port. Default `1884` (align with hub / Polisy general MQTT). |
+| `backend` | No | **`homekit`** or **`cloud`**. Seeding rules in [Ecobee quick start](#ecobee-quick-start-homekit). **`cloud`**: only realistic with a personal developer **`api_key`**. |
+| `hk_transport` | No | **`mqtt`** (default, preferred) or **`websocket`**. Saving transport or `hk_*` fields restarts the hub client. |
+| `hk_ws_url` | WS fallback | WebSocket URL of **udi-poly-homekit**, e.g. `ws://127.0.0.1:8163`. |
+| `hk_ws_token` | No | Optional hello token (**WebSocket only**). |
+| `hk_mqtt_host` | MQTT | Broker hostname. Default `localhost`. |
+| `hk_mqtt_port` | MQTT | Broker port. Default `1884`. |
 | `hk_mqtt_username` | No | Broker username when required. |
 | `hk_mqtt_password` | No | Broker password when required. |
-| `hk_mqtt_hub_slug` | MQTT | Must match the hub Custom Param **`mqtt_hub_slug`** (topic segment). Default `default`. Allowed characters: `[A-Za-z0-9_-]` (length 1–128). |
-| `hk_mqtt_client_slug` | MQTT | Your client’s topic segment under `…/clients/<slug>/…`; must match the MQTT topic you publish to, and **`hello.client`** (sanitized) must match this slug if you send **`client`** on hello. Default **`udi-poly-ecobee`** (this plugin’s PG3 id). **Set a unique value** if you run multiple Ecobee NS instances or other hubs’ clients on the same broker and need to avoid collisions. Same character rules as **`hk_mqtt_hub_slug`**. |
-| `use_celsius` | No | `auto`, `true`, or `false` for temperature units. Default `auto`. |
-| `dry_run` | No | `true` or `false`. When `true`, the HomeKit path logs writes instead of applying them. Default `false`. |
-| `api_key` | Cloud / PIN | Your **Ecobee developer application key** (used as Ecobee OAuth **`client_id`**). Required for PIN flow on **local** Polyglot. With **`backend=cloud`** and **Polyglot OAuth**, a non-empty value **overrides** the Polyglot-injected default and must be a key you registered in the Ecobee developer portal with a **redirect URI** matching Polyglot’s callback: production `https://polyglot.isy.io/api/oauth/callback`. See **Before you start** for UDI/shared-key limitations. |
+| `hk_mqtt_hub_slug` | MQTT | Must match hub **`mqtt_hub_slug`**. Default `default`. Characters: `[A-Za-z0-9_-]`, length 1–128. |
+| `hk_mqtt_client_slug` | MQTT | Client topic segment. Default **`udi-poly-ecobee`**. Unique per NS instance if sharing a broker. |
+| `use_celsius` | No | `auto`, `true`, or `false`. Default `auto`. |
+| `dry_run` | No | `true` / `false`. Default `false`. |
+| `api_key` | Cloud / PIN | Ecobee developer application key. See [Cloud backend](#cloud-backend-legacy). |
 
-## Custom Typed Configuration Parameters
+---
 
-Use **Custom Typed Params** in PG3 for HomeKit mode:
+## Reference: Custom Typed Configuration Parameters
 
 | Section | Purpose |
 | ------- | ------- |
-| **HomeKit thermostat address overrides** | Map hub `device_id` to an Ecobee thermostat id for IoX address `t<id>`. |
-| **HomeKit remote sensor address overrides** | Optional hints for `rs_*` sensor node addresses. |
-| **Climate program labels** | Per `device_id`: override **climateList** slot labels (by index) in **CT_*_\<tstat\>*** NLS. **Cloud** **GV3** uses the full list; **HomeKit** **GV3** **commands** only offer indices **0–3** (**away / home / sleep / smart1**), but labels for those indices still come from this table. |
+| **HomeKit thermostat address overrides** | Map hub `device_id` to thermostat id for IoX address `t<id>`. |
+| **HomeKit remote sensor address overrides** | Optional hints for `rs_*` sensor addresses. |
+| **Climate program labels** | Per `device_id`: override **climateList** labels. **HomeKit** **GV3** **commands** only offer indices **0–3** (away / home / sleep / smart1); status can show wider label range. |
 
-See **README.md**: **Recommended setup (HomeKit)** and **HomeKit hub mode** first; **Initial setup (cloud backend only)** only if you use **`backend`** **`cloud`**.
+---
 
-On the **Ecobee Controller** node in HomeKit mode: **GV1** (boolean) is **true** when the **active** transport (the one selected by **`hk_transport`**) has completed **hello** to the hub. **GV4** (UOM 25) is the **WebSocket** path: **0** = not selected, **1** = not connected / reconnecting, **2** = connected. **GV5** is the same tri-state for **MQTT**. Only one path is non-zero at a time unless the client is between reconnects.
+## Reference: HomeKit behavior vs cloud
 
-Transport problems raise PG3 **Notices** (**`homekit_hub_unreachable`** on connect/hello failures, **`homekit_hub_disconnected`** when the session drops while the client retries) and **`LOGGER.warning`** lines in **`logs/debug.log`**. Rapid disconnect/reconnect cycles **dedupe** **`homekit_hub_disconnected`** to about one Notice per 45 seconds so the UI is not flooded; warnings still log each cycle (the deduped line notes that the Notice was suppressed).
+### Overview
 
-In HomeKit mode, hub **`warnings`** (per udi-poly-homekit **PROTOCOL.md**) appear in PG3 **Notices** as **`homekit_hub_warnings`** and in **`logs/debug.log`** at WARNING/ERROR.
+- **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit**.
+- Thermostats appear as **`t…`** nodes; remote sensors as **`rs…`**. **No weather / forecast nodes** on HomeKit.
+- **Realtime updates** from hub events; **QUERY** triggers a snapshot read.
+- Hub metadata characteristics are informational only (not copied to IoX drivers). Unknown HAP chars may log **`homekit_unknown_chars`** notices.
+- Temperature display follows **`use_celsius`** in Custom Params, not HAP Temperature Display Units.
 
-If the hub payload cannot be turned into a thermostat node, **Notice** **`homekit_no_thermostat`** includes a JSON snapshot of the **`devices[]`** list the plugin received from the hub.
+### HomeKit thermostat node (drivers and commands)
+
+HomeKit thermostats use **`EcobeeHKC_*`** / **`EcobeeHKF_*`** (Celsius / Fahrenheit) — slimmer than cloud nodedefs.
+
+**Supported via hub:** **ST**, **CLISPH**, **CLISPC**, **CLIMD**, **CLIFS**, **CLIHUM**, **CLIHCS**, **CLIFRS**, **GV1** (target humidity), **GV3** (comfort / program), **BRT** / **DIM**, **QUERY**.
+
+**GV3 (HomeKit) — four hold slots only:** Ecobee's vendor hold accepts four program bytes mapped to IoX indices **away (0), home (1), sleep (2), smart1 (3)**. **GV3** **commands** expose only those four (**CT_HK_***). **GV3** **status** uses the full **CTA_*** range for label resolution. Vacation, Smart Away, and other app-only programs are not separate HomeKit writes — use the **Ecobee app** or **cloud** backend.
+
+**Removed vs cloud (not on HomeKit node):** **CLISMD** (schedule / hold mode), **GV4**–**GV11**, **GV17** (ECO+), etc. Use the Ecobee app or cloud if you need those.
+
+**Hold duration:** HomeKit nodes have **no CLISMD**. You cannot tell from this Node Server whether a hold is "until next" or "indefinite" — use the Ecobee app or cloud backend for that distinction.
+
+**CLIFS** uses the same IoX values as cloud (**auto = 0**, **on = 1**); HAP TargetFanState is translated at the hub boundary.
+
+### Limitations (HomeKit path)
+
+The Ecobee app's full program list (vacation, custom comforts, Smart Home/Away, etc.) is not exposed as distinct HomeKit hold values — only **Home, Sleep, Away,** and **Temp** (smart1). Schedules, hold duration, and some comfort features may not map 1:1 to HomeKit.
+
+After profile upgrades, restart the Node Server and let the profile refresh so nodedefs update.
+
+---
+
+## Cloud backend (legacy)
+
+Use only if you have a **working personal Ecobee developer API key** (not UDI / Polyglot Cloud OAuth).
+
+1. Set **`backend`** to **`cloud`** and configure **`api_key`**.
+2. On first start you receive a PIN.
+3. Log in at the Ecobee web site → Profile → **My Apps** → **Add Application** → enter the PIN.
+4. Wait for approval (checked every 60 seconds; do not restart during this step).
+5. Thermostats, sensors, weather, and forecast nodes are added via the Ecobee API (refreshes about every 3 minutes).
+
+**Schedule mode (cloud only):** **CLISMD** — Running / Hold Next / Hold Indefinite. HomeKit thermostats do not expose **CLISMD**; see [GV3 hold slots](#reference-homekit-behavior-vs-cloud) above.
+
+With Polyglot OAuth, **`api_key`** overrides injected defaults and must use a redirect URI matching `https://polyglot.isy.io/api/oauth/callback`. Do not rely on historical UDI-provided keys for new setups.
