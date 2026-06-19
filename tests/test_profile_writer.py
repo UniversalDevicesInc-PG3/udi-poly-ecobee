@@ -73,6 +73,9 @@ def test_write_ecobee_climate_profile_writes_custom_xml(mini_plugin: Path):
     assert 'EcobeeC_9243' in text
     assert 'EcobeeHKC_9243' in text
     assert 'EcobeeHKF_9243' in text
+    hk_c_block = text.split('EcobeeHKC_9243')[1].split('EcobeeHKF_9243')[0]
+    assert 'CT_HK_9243' in hk_c_block
+    assert 'HoldType' not in hk_c_block
     assert '9243' in text
     editor = mini_plugin / 'profile' / 'editor' / 'custom.xml'
     ed = editor.read_text(encoding='utf-8')

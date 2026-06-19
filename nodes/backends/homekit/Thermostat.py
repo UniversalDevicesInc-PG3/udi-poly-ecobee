@@ -78,6 +78,36 @@ class HomeKitThermostat(Node):
         _ = from_hap_c
         self.set_driver_safe('CLISPC', float(val))
 
+    def set_clismd(self, val: int) -> None:
+        self.set_driver_safe('CLISMD', int(val))
+
+    def _hold_type_from_cmd(self, cmd: dict, default: int = 1) -> int:
+        """IoX optional ``HoldType`` on multi-select commands; default hold-next when omitted."""
+        query = cmd.get('query') or {}
+        raw = query.get('HoldType.uom25')
+        if raw is None or raw == '':
+            return default
+        try:
+            v = int(float(raw))
+        except (TypeError, ValueError):
+            return default
+        return v if v in (1, 2) else default
+
+    def _mark_hold_active(self, cmd: dict | None = None, hold_type: int | None = None) -> None:
+        """Setpoint / comfort holds imply a manual hold; HAP does not expose hold duration."""
+        if hold_type is None:
+            hold_type = self._hold_type_from_cmd(cmd or {}, default=1)
+        self.set_clismd(hold_type)
+
+    def _hub_clear_hold(self) -> bool:
+        """Resume programmed schedule via Ecobee vendor clear-hold button."""
+        c = hap_apply.hap_name_vendor_ecobee_clear_hold()
+        ok = True
+        for val in hap_apply.vendor_ecobee_clear_hold_wire_values():
+            if not self._hub_write(c, val):
+                ok = False
+        return ok
+
     def apply_hub_characteristic(self, characteristic: str, value: Any) -> bool:
         # Delegate to hap_apply (handles vendor UUIDs before :func:`classify` marks them UNKNOWN).
         return hap_apply.apply_characteristic_to_thermostat(self, characteristic, value, log=LOGGER)
@@ -155,6 +185,7 @@ class HomeKitThermostat(Node):
                 ) and self._hub_write(hap_apply.hap_name_cooling_threshold(), cv):
                     self.set_clisph(heat)
                     self.set_clispc(cool)
+                    self._mark_hold_active(cmd)
                 return
             c = self._hap_char_for_heat_driver_write()
             v = hap_apply.iox_temp_to_hap_celsius(
@@ -162,6 +193,7 @@ class HomeKitThermostat(Node):
             )
             if self._hub_write(c, v):
                 self.set_clisph(heat)
+                self._mark_hold_active(cmd)
         elif driver == 'CLISPC':
             cool = float(cmd['value'])
             m = self._climd_write_mode()
@@ -181,6 +213,7 @@ class HomeKitThermostat(Node):
                 ) and self._hub_write(hap_apply.hap_name_cooling_threshold(), cv):
                     self.set_clisph(heat)
                     self.set_clispc(cool)
+                    self._mark_hold_active(cmd)
                 return
             c = self._hap_char_for_cool_driver_write()
             v = hap_apply.iox_temp_to_hap_celsius(
@@ -188,6 +221,7 @@ class HomeKitThermostat(Node):
             )
             if self._hub_write(c, v):
                 self.set_clispc(cool)
+                self._mark_hold_active(cmd)
         elif driver == 'CLIFS':
             c = hap_apply.hap_name_target_fan_state()
             v = int(cmd['value'])
@@ -216,6 +250,34 @@ class HomeKitThermostat(Node):
         hub_byte = hap_apply.gv3_to_ecobee_set_hold_schedule(v)
         if self._hub_write(c, hub_byte):
             self.set_driver_safe('GV3', v)
+            self._mark_hold_active(cmd)
+
+    def cmd_set_schedule_mode(self, cmd):
+        """Schedule mode: **CLISMD** 0 = resume program; 1/2 recorded locally only on HomeKit."""
+        try:
+            v = int(float(cmd['value']))
+        except (KeyError, TypeError, ValueError):
+            LOGGER.debug('cmd_set_schedule_mode: bad value %r', cmd)
+            return
+        try:
+            cur = int(float(self.getDriver('CLISMD')))
+        except (TypeError, ValueError):
+            cur = None
+        if cur == v:
+            return
+        if v == 0:
+            if self._hub_clear_hold():
+                self.set_clismd(0)
+                if self.hk:
+                    self.hk.schedule_thermostat_refresh_after_hold_clear(self)
+            return
+        self.set_clismd(v)
+        LOGGER.info(
+            'HomeKit %s: CLISMD=%s stored locally; hold-next/indefinite are not set via HAP. '
+            'Use GV3 or setpoints to place a hold, or CLISMD=0 to resume the schedule.',
+            self.address,
+            v,
+        )
 
     def set_point(self, cmd):
         step = float(cmd.get('value', 1))
@@ -242,6 +304,7 @@ class HomeKitThermostat(Node):
             if self._hub_write(h_c, hv) and self._hub_write(c_c, cv):
                 self.set_clisph(heat)
                 self.set_clispc(cool)
+                self._mark_hold_active(cmd)
             return
         if mode == 1 or mode == 4:
             cur = float(self.getDriver('CLISPH'))
@@ -251,6 +314,7 @@ class HomeKitThermostat(Node):
             )
             if self._hub_write(t_t, v):
                 self.set_clisph(nxt)
+                self._mark_hold_active(cmd)
             return
         cur = float(self.getDriver('CLISPC'))
         nxt = cur + step
@@ -259,6 +323,7 @@ class HomeKitThermostat(Node):
         )
         if self._hub_write(t_t, v):
             self.set_clispc(nxt)
+            self._mark_hold_active(cmd)
 
     commands = {
         'QUERY': query,
@@ -267,6 +332,7 @@ class HomeKitThermostat(Node):
         'CLIFS': cmd_set_pf,
         'CLIMD': cmd_set_mode,
         'GV1': cmd_set_humidity,
+        'CLISMD': cmd_set_schedule_mode,
         'GV3': cmd_set_gv3,
         'BRT': set_point,
         'DIM': set_point,

@@ -120,6 +120,7 @@ driversMap = {
     { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
     { 'driver': 'CLIFRS', 'value': 0,  'uom': '80', 'name': 'Fan State'  },
     { 'driver': 'GV1',    'value': 0,  'uom': '22', 'name': 'Humidification Setpoint'  },
+    { 'driver': 'CLISMD', 'value': 0,  'uom': '25', 'name': 'Hold Type'  },
     { 'driver': 'GV3',    'value': 0,  'uom': '25', 'name': 'Climate / program (from hub)'  },
   ],
   'EcobeeHKC': [
@@ -132,6 +133,7 @@ driversMap = {
     { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
     { 'driver': 'CLIFRS', 'value': 0,  'uom': '80', 'name': 'Fan State'  },
     { 'driver': 'GV1',    'value': 0,  'uom': '22', 'name': 'Humidification Setpoint'  },
+    { 'driver': 'CLISMD', 'value': 0,  'uom': '25', 'name': 'Hold Type'  },
     { 'driver': 'GV3',    'value': 0,  'uom': '25', 'name': 'Climate / program (from hub)'  },
   ],
   'EcobeewAQF': [

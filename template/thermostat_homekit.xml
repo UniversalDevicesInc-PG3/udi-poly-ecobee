@@ -1,4 +1,5 @@
-  <!-- HomeKit hub path: subset of cloud controls; GV3 set uses Ecobee vendor SET_HOLD_SCHEDULE. -->
+  <!-- HomeKit hub path: subset of cloud controls; GV3 set uses Ecobee vendor SET_HOLD_SCHEDULE; CLISMD=0 uses CLEAR_HOLD.
+       GV3 command is comfort-only (no HoldType param); use CLISMD separately for hold type / resume schedule. -->
   <nodeDef id="EcobeeHKC_tstatid" nodeType="140" nls="140E" >
     <sts>
       <st id="ST" editor="I_TEMP_C" />
@@ -10,7 +11,8 @@
       <st id="CLIHCS" editor="I_TSTAT_ECOHCS" />
       <st id="CLIFRS" editor="I_TSTAT_FAN_STATE" />
       <st id="GV1" editor="I_TSTAT_HUM_SET" />
-      <st id="GV3" editor="CTA_tstatid" />
+      <st id="CLISMD" editor="I_TSTAT_PROG_MODE2" />
+      <st id="GV3" editor="CT_HK_tstatid" />
     </sts>
     <cmds>
       <accepts>
@@ -28,6 +30,9 @@
         </cmd>
         <cmd id="GV1">
           <p id="" editor="I_TSTAT_HUM_SET" init="GV1" />
+        </cmd>
+        <cmd id="CLISMD">
+          <p id="" editor="I_TSTAT_PROG_MODE2" init="CLISMD" />
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_HK_tstatid" init="GV3" />
@@ -53,7 +58,8 @@
       <st id="CLIHCS" editor="I_TSTAT_ECOHCS" />
       <st id="CLIFRS" editor="I_TSTAT_FAN_STATE" />
       <st id="GV1" editor="I_TSTAT_HUM_SET" />
-      <st id="GV3" editor="CTA_tstatid" />
+      <st id="CLISMD" editor="I_TSTAT_PROG_MODE2" />
+      <st id="GV3" editor="CT_HK_tstatid" />
     </sts>
     <cmds>
       <accepts>
@@ -71,6 +77,9 @@
         </cmd>
         <cmd id="GV1">
           <p id="" editor="I_TSTAT_HUM_SET" init="GV1" />
+        </cmd>
+        <cmd id="CLISMD">
+          <p id="" editor="I_TSTAT_PROG_MODE2" init="CLISMD" />
         </cmd>
         <cmd id="GV3">
           <p id="" editor="CT_HK_tstatid" init="GV3" />

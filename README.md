@@ -24,6 +24,19 @@ Ecobee has **disabled UDI / Polyglot Cloud OAuth** for this integration. **New s
 
 On **HomeKit** thermostats, connection semantics differ from cloud **GV8**; see **[CONFIG.md](CONFIG.md)** for controller **GV1** / **GV5** status.
 
+## HomeKit thermostat controls
+
+HomeKit nodes use a slimmer driver set than cloud. The main schedule-related controls are **separate** in the IoX UI (not a combined multi-select):
+
+| Control | Driver | Purpose |
+|---------|--------|---------|
+| **Climate Type** | **GV3** | Hold away / home / sleep / smart1 on the hub (four slots only) |
+| **Schedule Mode** | **CLISMD** | **Running (0)** = resume programmed schedule (clear hold on hub); **Hold Next (1)** / **Hold Indefinite (2)** = IoX record only |
+
+Changing **GV3** or setpoints places a hold and defaults to **Hold Next** unless you set **CLISMD** separately first. **CLISMD = Running** is the IoX action to resume the Ecobee schedule after a manual hold.
+
+Details, limitations vs cloud, and parameter tables: **[CONFIG.md — HomeKit thermostat node](CONFIG.md#homekit-thermostat-node-drivers-and-commands)**.
+
 ## Monitoring
 
 See [Polyglot NodeServer monitoring](https://forum.universal-devices.com/topic/25016-polyglot-nodeserver-monitoring/) for heartbeats. Cloud installs can also check thermostat **GV8** for Ecobee server visibility.
@@ -33,7 +46,7 @@ See [Polyglot NodeServer monitoring](https://forum.universal-devices.com/topic/2
 Store releases typically appear within about an hour of publish.
 
 1. Open the Polyglot web UI → Dashboard → **Restart** the Node Server
-2. If the release notes mention **Profile Change**, close and reopen the Admin Console if nodes look stale
+2. If the release notes mention **Profile Change**, close and reopen the Admin Console (or **Load Profile**) if nodes look stale — recent HomeKit profile updates split **GV3** and **CLISMD** controls (profile **4.1.7**+).
 
 ## Changelog
 
@@ -41,4 +54,4 @@ Store releases typically appear within about an hour of publish.
 
 ## Advanced documentation
 
-HomeKit driver details, GV3 hold behavior, limitations vs cloud, and full parameter tables: **[CONFIG.md](CONFIG.md)**
+HomeKit driver details, hold behavior, limitations vs cloud, and full parameter tables: **[CONFIG.md](CONFIG.md)**

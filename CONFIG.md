@@ -150,13 +150,15 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 
 HomeKit thermostats use **`EcobeeHKC_*`** / **`EcobeeHKF_*`** (Celsius / Fahrenheit) — slimmer than cloud nodedefs.
 
-**Supported via hub:** **ST**, **CLISPH**, **CLISPC**, **CLIMD**, **CLIFS**, **CLIHUM**, **CLIHCS**, **CLIFRS**, **GV1** (target humidity), **GV3** (comfort / program), **BRT** / **DIM**, **QUERY**.
+**Supported via hub:** **ST**, **CLISPH**, **CLISPC**, **CLIMD**, **CLIFS**, **CLIHUM**, **CLIHCS**, **CLIFRS**, **GV1** (target humidity), **CLISMD** (resume schedule), **GV3** (comfort / program), **BRT** / **DIM**, **QUERY**.
 
 **GV3 (HomeKit) — four hold slots only:** Ecobee's vendor hold accepts four program bytes mapped to IoX indices **away (0), home (1), sleep (2), smart1 (3)**. **GV3** **commands** expose only those four (**CT_HK_***). **GV3** **status** uses the full **CTA_*** range for label resolution. Vacation, Smart Away, and other app-only programs are not separate HomeKit writes — use the **Ecobee app** or **cloud** backend.
 
-**Removed vs cloud (not on HomeKit node):** **CLISMD** (schedule / hold mode), **GV4**–**GV11**, **GV17** (ECO+), etc. Use the Ecobee app or cloud if you need those.
+**CLISMD (HomeKit):** **Running (0)** sends the Ecobee vendor **clear hold** sequence on the hub and refreshes the thermostat snapshot. **Hold Next (1)** and **Hold Indefinite (2)** update the IoX driver only — HomeKit does not expose hold duration the way the cloud API does. Setpoints and **GV3** writes imply a hold (**CLISMD** becomes **1**); use **CLISMD=0** to resume the programmed schedule.
 
-**Hold duration:** HomeKit nodes have **no CLISMD**. You cannot tell from this Node Server whether a hold is "until next" or "indefinite" — use the Ecobee app or cloud backend for that distinction.
+**Removed vs cloud (not on HomeKit node):** **GV4**–**GV11**, **GV17** (ECO+), etc. Use the Ecobee app or cloud if you need those.
+
+**Hold duration:** HomeKit cannot set hold-next vs indefinite independently. After a hold is placed via setpoints or **GV3**, **CLISMD** reports **1** (hold active). Use the Ecobee app or cloud backend if you need the exact hold type.
 
 **CLIFS** uses the same IoX values as cloud (**auto = 0**, **on = 1**); HAP TargetFanState is translated at the hub boundary.
 
@@ -178,6 +180,6 @@ Use only if you have a **working personal Ecobee developer API key** (not UDI / 
 4. Wait for approval (checked every 60 seconds; do not restart during this step).
 5. Thermostats, sensors, weather, and forecast nodes are added via the Ecobee API (refreshes about every 3 minutes).
 
-**Schedule mode (cloud only):** **CLISMD** — Running / Hold Next / Hold Indefinite. HomeKit thermostats do not expose **CLISMD**; see [GV3 hold slots](#reference-homekit-behavior-vs-cloud) above.
+**Schedule mode:** **CLISMD** — Running / Hold Next / Hold Indefinite on all backends. On **HomeKit**, only **Running (0)** is sent to the hub (vendor clear hold); **1** and **2** are IoX-only. See [GV3 hold slots](#reference-homekit-behavior-vs-cloud) above.
 
 With Polyglot OAuth, **`api_key`** overrides injected defaults and must use a redirect URI matching `https://polyglot.isy.io/api/oauth/callback`. Do not rely on historical UDI-provided keys for new setups.

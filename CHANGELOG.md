@@ -7,9 +7,23 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.3] - 2026-06-19
+
+### Added
+
+- **HomeKit resume schedule:** **CLISMD = Running (0)** sends the Ecobee vendor **clear hold** sequence on the hub (`VENDOR_ECOBEE_CLEAR_HOLD`), then schedules a debounced thermostat snapshot refresh so IoX setpoints and hold state match the stat after the hold clears.
+- **HomeKit hold / comfort UX:** HomeKit thermostats expose **Climate Type (`GV3`)** and **Schedule Mode (`CLISMD`)** as **separate** IoX controls (not a coupled comfort + HoldType multi-select like cloud). Change comfort alone, hold type alone, or both in sequence.
+
 ### Changed
 
+- **HomeKit `GV3` profile:** status and command both use **`CT_HK_*`** (away / home / sleep / smart1 only). Comfort-only writes default to **Hold Next** (`CLISMD = 1`) in the backend when no hold type is specified.
+- **Cloud `GV3` holds:** optional **HoldType** on climate commands defaults to **Hold Next** when omitted, so the admin UI no longer requires setting comfort and hold type together.
 - **User setup docs:** restructured **CONFIG.md** as the primary HomeKit setup guide with step-by-step quick start, hub/Ecobee defaults checklist, verify/troubleshooting sections, and **Reference: HomeKit behavior vs cloud** (moved from README). **README.md** trimmed to help links and CONFIG pointers.
+- **Profile (IoX nodedef):** version **4.1.7** — HomeKit thermostat template updates above; **4.1.5** fixed non-ASCII punctuation in generated editor XML. After upgrade, restart the Node Server and **Load Profile** if release notes mention **Profile Change**.
+
+### Fixed
+
+- **HomeKit clear-hold UI refresh:** immediately after **CLISMD = Running**, a hub snapshot could still report stale hold setpoints until **QUERY**; the debounced refresh after clear-hold updates drivers without a manual query.
 
 ## [4.1.2] - 2026-05-25
 

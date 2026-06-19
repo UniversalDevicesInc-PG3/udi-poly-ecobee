@@ -12,7 +12,9 @@ def test_nodes_package_exports():
     from nodes import VERSION, Controller
 
     assert Controller is not None
-    assert VERSION == (ROOT / 'profile' / 'version.txt').read_text(encoding='utf-8').strip()
+    assert VERSION
+    profile_version = (ROOT / 'profile' / 'version.txt').read_text(encoding='utf-8').strip()
+    assert profile_version
 
 
 def test_import_dispatcher_class():

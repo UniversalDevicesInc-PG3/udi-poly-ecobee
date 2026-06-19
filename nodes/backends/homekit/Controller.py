@@ -1305,7 +1305,12 @@ class HomeKitBackend:
         nu = normalize_hap_uuid(ch)
         return bool(nu and nu in _THERM_SNAPSHOT_REFRESH_UUID_NORM)
 
-    def _schedule_thermostat_snapshot_refresh(self, node: HomeKitThermostat, delay: float = 1.2) -> None:
+    def _schedule_thermostat_debounced(
+        self,
+        node: HomeKitThermostat,
+        fire: Any,
+        delay: float,
+    ) -> None:
         did = str(getattr(node, 'device_id_hub', None) or '').strip().lower()
         if not did:
             return
@@ -1314,9 +1319,9 @@ class HomeKitBackend:
             with self._thermostat_snapshot_timer_lock:
                 self._thermostat_snapshot_timers.pop(did, None)
             try:
-                self.refresh_thermostat_gv3(node)
+                fire()
             except Exception:
-                LOGGER.debug('debounced thermostat GV3 refresh failed', exc_info=True)
+                LOGGER.debug('debounced thermostat refresh failed', exc_info=True)
 
         with self._thermostat_snapshot_timer_lock:
             old = self._thermostat_snapshot_timers.get(did)
@@ -1329,6 +1334,26 @@ class HomeKitBackend:
             timer.daemon = True
             self._thermostat_snapshot_timers[did] = timer
             timer.start()
+
+    def _schedule_thermostat_snapshot_refresh(self, node: HomeKitThermostat, delay: float = 1.2) -> None:
+        self._schedule_thermostat_debounced(
+            node,
+            lambda: self.refresh_thermostat_gv3(node),
+            delay,
+        )
+
+    def schedule_thermostat_refresh_after_hold_clear(
+        self,
+        node: HomeKitThermostat,
+        delay: float = 1.5,
+    ) -> None:
+        """After clear-hold, hub setpoints lag; debounced full snapshot matches QUERY behavior."""
+
+        def _fire() -> None:
+            self.refresh_thermostat(node)
+            node.reportDrivers()
+
+        self._schedule_thermostat_debounced(node, _fire, delay)
 
     def _on_hap_event(self, data: Dict[str, Any]) -> None:
         did = str(data.get('device_id') or '').strip().lower()

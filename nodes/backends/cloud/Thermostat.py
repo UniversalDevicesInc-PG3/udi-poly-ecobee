@@ -625,19 +625,24 @@ class Thermostat(Node):
       LOGGER.debug('{}:cmdSetClimateType: {}={} query={}'.format(self.address,cmd['cmd'],cmd['value'],cmd['query']))
       # We don't check if this is already current since they may just want setpoints returned.
       climateName = getMapName(climateMap,int(cmd['value']))
-      query = cmd['query']
+      query = cmd.get('query') or {}
+      hold_val = query.get('HoldType.uom25')
+      if hold_val is None or hold_val == '':
+        hold_val = 1
+      else:
+        hold_val = int(hold_val)
       command = {
         'functions': [{
           'type': 'setHold',
           'params': {
-            'holdType': self.getHoldType(query['HoldType.uom25']),
+            'holdType': self.getHoldType(hold_val),
             'holdClimateRef': climateName
           }
         }]
       }
       if self.ecobeePost(command):
         self.setDriver(cmd['cmd'], cmd['value'])
-        self.setDriver('CLISMD',query['HoldType.uom25'])
+        self.setDriver('CLISMD', hold_val)
         # If we went back to current climate name that will reset temps, so reset isy
         #if self.program['currentClimateRef'] == climateName:
         self.setClimateSettings(climateName)

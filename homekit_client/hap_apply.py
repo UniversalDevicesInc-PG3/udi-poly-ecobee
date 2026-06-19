@@ -376,6 +376,20 @@ def hap_name_vendor_ecobee_current_mode() -> str:
     return 'VENDOR_ECOBEE_CURRENT_MODE'
 
 
+def hap_name_vendor_ecobee_clear_hold() -> str:
+    """Ecobee vendor: cancel manual hold and resume the programmed schedule (HAP button)."""
+    return 'VENDOR_ECOBEE_CLEAR_HOLD'
+
+
+def vendor_ecobee_clear_hold_wire_values() -> tuple[bool, ...]:
+    """Wire values for :func:`hap_name_vendor_ecobee_clear_hold`.
+
+    Ecobee often ignores a lone ``true`` press; ``false`` then ``true`` matches Home Assistant's
+    proven HomeKit controller sequence and reliably clears the hold.
+    """
+    return (False, True)
+
+
 def apply_characteristic_to_sensor(
     node: Any,
     characteristic: str,
