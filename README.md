@@ -56,7 +56,7 @@ HomeKit does **not** expose Ecobee comfort **names** (only a comfort byte plus c
 | Home, Away, Sleep | Vendor hold byte only (setpoints come from the hub program). |
 | Custom (Smart1–Smart7, Vacation, …) | Plugin writes learned heat/cool to the hub, then places the hold. |
 
-If a custom comfort has no cached setpoints yet, run **QUERY** while the thermostat is **on that comfort** in the Ecobee app, or switch to it once on the stat so the plugin can learn heat/cool.
+If a custom comfort has no cached setpoints yet, run **QUERY** while the thermostat is **on that comfort** in the Ecobee app, or switch to it once on the stat so the plugin can learn heat/cool. Then refresh the PG3 Config page and you should see the values.
 
 On hub connect and Node Server start, each HomeKit thermostat automatically runs a debounced hub snapshot (same as **Query**) to cache comfort setpoints for **Climate Type** commands.
 
