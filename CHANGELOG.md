@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.10] - 2026-06-23
+
+### Added
+
+- **HomeKit heat/cool minimum delta:** Custom Param **`hk_heat_cool_min_delta`** (default **3**, range **1–10**) sets the minimum separation between heat and cool setpoints when co-writing HAP thresholds in **Auto** mode. Match your Ecobee app **Compressor minimum delta** (e.g. **`2`** when the stat allows 2°). Documented in **README.md** and **CONFIG.md**.
+
 ## [4.1.9] - 2026-06-19
 
 ### Fixed

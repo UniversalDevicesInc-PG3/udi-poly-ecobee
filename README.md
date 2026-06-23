@@ -62,6 +62,8 @@ On hub connect and Node Server start, each HomeKit thermostat automatically runs
 
 Changing **Climate Type** or **Heat Setpoint** / **Cool Setpoint** places a hold and defaults to **Hold Next** unless you set **Schedule Mode** separately first. **Schedule Mode = Running** is the IoX action to resume the Ecobee schedule after a manual hold.
 
+**Heat/cool minimum delta (HomeKit):** In **Auto** mode the plugin keeps at least a configured gap between heat and cool setpoints before writing to the hub (Ecobee **compressor minimum delta**). Default is **3** degrees; if your Ecobee app uses **2**, set Custom Param **`hk_heat_cool_min_delta`** to **`2`** (in the stat's display units, °F or °C). See **[CONFIG.md](CONFIG.md#reference-custom-configuration-parameters)**.
+
 **Climate Type status (4.1.6+):** disambiguates **Vacation**, **Away Extended**, and other temp-slot comforts using setpoint signatures (not always catalog **Smart1**).
 
 **Climate Type commands (4.1.7+):** for comforts that need explicit setpoints, the plugin writes **Heat Setpoint** / **Cool Setpoint** before the vendor hold. **Home / Away / Sleep** use the hold byte only.

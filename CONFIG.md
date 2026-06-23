@@ -122,6 +122,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | `hk_mqtt_client_slug` | MQTT | Client topic segment. Default **`udi-poly-ecobee`**. Unique per NS instance if sharing a broker. |
 | `use_celsius` | No | `auto`, `true`, or `false`. Default `auto`. |
 | `dry_run` | No | `true` / `false`. Default `false`. |
+| `hk_heat_cool_min_delta` | No | HomeKit **Auto** mode: minimum separation between **Heat Setpoint** and **Cool Setpoint** when co-writing HAP thresholds (matches Ecobee app **Compressor minimum delta**). Integer **1–10** in the stat's display units (°F or °C). Default **`3`**. Set to **`2`** when the Ecobee app allows a 2° minimum. Cloud mode ignores this (Ecobee API enforces limits on the stat). |
 | `api_key` | Cloud / PIN | Ecobee developer application key. See [Cloud backend](#cloud-backend-legacy). |
 
 ---
@@ -227,6 +228,8 @@ Extra comforts that have never been active on the stat may still need one activa
 HomeKit thermostats use **`EcobeeHKC_*`** / **`EcobeeHKF_*`** (Celsius / Fahrenheit) — slimmer than cloud nodedefs.
 
 **Supported via hub:** **Temperature**, **Heat Setpoint**, **Cool Setpoint**, **Mode**, **Fan Mode**, **Humidity**, **HVAC State**, **Fan State**, **Humidification Setpoint**, **Schedule Mode**, **Climate Type**, **Setpoint Up** / **Setpoint Down**, **Query**.
+
+In **Auto** mode, **Heat Setpoint** / **Cool Setpoint** commands enforce a minimum gap before writing to the hub so IoX matches the physical thermostat. Default gap is **3** degrees; set Custom Param **`hk_heat_cool_min_delta`** to **`2`** (or your Ecobee app **Compressor minimum delta**) when the stat allows a narrower range. Value is in the stat's display units (°F or °C per **`use_celsius`**).
 
 **Climate Type** **(HomeKit):** **Status** uses the full comfort label range with per-thermostat custom names. When the hub reports HAP byte **3** (Temp), status disambiguates **Vacation**, **Away Extended**, and other extra comforts using setpoint signatures (not always catalog **Smart1**). **Commands** use **CT_HK_*** indices **away (0), home (1), sleep (2), smart1 (3)**; index **3** maps to the first configured extra comfort when **smart1** is not on the stat. For Temp-slot and collision comforts, the plugin writes heat/cool setpoints before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
 

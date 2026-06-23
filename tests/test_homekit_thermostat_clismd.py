@@ -144,6 +144,23 @@ def test_cmd_set_gv3_working_uses_program_setpoints():
     assert node._hub_write.call_args_list[0][0] == ('VENDOR_ECOBEE_SET_HOLD_SCHEDULE', 3)
 
 
+def test_cmd_set_pf_auto_respects_hk_heat_cool_min_delta():
+    node = _make_node()
+    node.getDriver = MagicMock(
+        side_effect=lambda d: {'CLIMD': '3', 'CLISPH': '69', 'CLISPC': '71'}.get(d, '0')
+    )
+    node.use_celsius = False
+    node.controller = MagicMock(effective_params={'hk_heat_cool_min_delta': '2'})
+    node.set_clisph = MagicMock()
+    node.set_clispc = MagicMock()
+    node._mark_hold_active = MagicMock()
+
+    node.cmd_set_pf({'cmd': 'CLISPH', 'value': 70})
+
+    node.set_clisph.assert_called_once_with(70)
+    node.set_clispc.assert_called_once_with(72)
+
+
 def test_cmd_set_gv3_temp_slot_aborts_without_known_setpoints():
     node = _make_node()
     node.getDriver.return_value = '3'

@@ -6,9 +6,11 @@ import pytest
 
 from params_flat import (
     DEFAULT_EFFECTIVE,
+    DEFAULT_HK_HEAT_COOL_MIN_DELTA,
     DEFAULT_HK_MQTT_CLIENT_SLUG,
     default_backend_for_new_param_seed,
     format_param_notice_html,
+    heat_cool_min_span_degrees,
     normalize_flat_params,
 )
 
@@ -23,6 +25,25 @@ def test_defaults_when_empty_raw():
     assert out['hk_ws_url'] == DEFAULT_EFFECTIVE['hk_ws_url']
     assert out['hk_mqtt_client_slug'] == DEFAULT_HK_MQTT_CLIENT_SLUG == DEFAULT_EFFECTIVE['hk_mqtt_client_slug']
     assert out['dry_run'] == 'false'
+    assert out['hk_heat_cool_min_delta'] == DEFAULT_HK_HEAT_COOL_MIN_DELTA
+
+
+def test_hk_heat_cool_min_delta_default_span():
+    assert heat_cool_min_span_degrees(False, {}) == 3.0
+    assert heat_cool_min_span_degrees(True, {}) == 3.0
+
+
+def test_hk_heat_cool_min_delta_custom():
+    eff = {'hk_heat_cool_min_delta': '2'}
+    assert heat_cool_min_span_degrees(False, eff) == 2.0
+    assert heat_cool_min_span_degrees(True, eff) == 2.0
+
+
+def test_hk_heat_cool_min_delta_invalid_falls_back():
+    prev = {**DEFAULT_EFFECTIVE, 'hk_heat_cool_min_delta': '3'}
+    out, errs = normalize_flat_params({'hk_heat_cool_min_delta': '0'}, prev)
+    assert errs
+    assert out['hk_heat_cool_min_delta'] == '3'
 
 
 def test_empty_hk_transport_falls_back_to_default():

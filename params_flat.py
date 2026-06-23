@@ -19,6 +19,9 @@ def _is_valid_mqtt_slug(s: str) -> bool:
 # Set ``hk_mqtt_client_slug`` explicitly if multiple instances or other plugins need distinct slugs on one broker.
 DEFAULT_HK_MQTT_CLIENT_SLUG = "udi-poly-ecobee"
 
+# HomeKit auto-mode minimum heat/cool separation (degrees in the stat's display units).
+DEFAULT_HK_HEAT_COOL_MIN_DELTA = '3'
+
 
 DEFAULT_EFFECTIVE: Dict[str, str] = {
     # Fallback when normalizing empty input; seeding ``backend`` uses :func:`default_backend_for_new_param_seed`.
@@ -36,6 +39,7 @@ DEFAULT_EFFECTIVE: Dict[str, str] = {
     'hk_mqtt_client_slug': DEFAULT_HK_MQTT_CLIENT_SLUG,
     'use_celsius': 'auto',
     'dry_run': 'false',
+    'hk_heat_cool_min_delta': DEFAULT_HK_HEAT_COOL_MIN_DELTA,
 }
 
 
@@ -76,6 +80,35 @@ def default_backend_for_new_param_seed(
     return 'homekit'
 
 
+def _parse_hk_heat_cool_min_delta(raw: Any, fallback: str) -> Tuple[float, bool]:
+    """Return (degrees, had_error)."""
+    try:
+        val = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return float(fallback), True
+    if val < 1.0 or val > 10.0:
+        return float(fallback), True
+    return val, False
+
+
+def heat_cool_min_span_degrees(use_celsius: bool, effective: Optional[Mapping[str, str]] = None) -> float:
+    """
+    Minimum heat/cool separation for HomeKit threshold co-writes.
+
+    ``hk_heat_cool_min_delta`` is in the thermostat's display units (°F or °C), matching the
+    Ecobee app **Compressor minimum delta** setting.
+    """
+    eff = effective or {}
+    fallback = eff.get('hk_heat_cool_min_delta', DEFAULT_HK_HEAT_COOL_MIN_DELTA)
+    if fallback is None or str(fallback).strip() == '':
+        fallback = DEFAULT_HK_HEAT_COOL_MIN_DELTA
+    val, _ = _parse_hk_heat_cool_min_delta(
+        eff.get('hk_heat_cool_min_delta', fallback),
+        str(fallback),
+    )
+    return val
+
+
 def normalize_flat_params(
     raw: Mapping[str, Any],
     prev: Optional[Mapping[str, str]] = None,
@@ -84,7 +117,7 @@ def normalize_flat_params(
     Validate flat params and return ``(effective, errors)``.
 
     ``effective`` always contains keys: backend, hk_transport, hk_ws_url, hk_ws_token,
-    hk_mqtt_* fields, use_celsius, dry_run.
+    hk_mqtt_* fields, use_celsius, dry_run, hk_heat_cool_min_delta.
     ``errors`` entries are plain-text lines (caller may wrap in HTML for notices).
     """
     prev_m: Dict[str, str] = dict(DEFAULT_EFFECTIVE)
@@ -139,6 +172,16 @@ def normalize_flat_params(
     if dr not in ('true', 'false'):
         errs.append(f"dry_run: {raw.get('dry_run')!r} (allowed: true, false)")
         dr = prev_m.get('dry_run', DEFAULT_EFFECTIVE['dry_run'])
+
+    delta_f, delta_err = _parse_hk_heat_cool_min_delta(
+        raw.get('hk_heat_cool_min_delta', prev_m.get('hk_heat_cool_min_delta', DEFAULT_HK_HEAT_COOL_MIN_DELTA)),
+        prev_m.get('hk_heat_cool_min_delta', DEFAULT_HK_HEAT_COOL_MIN_DELTA),
+    )
+    if delta_err:
+        errs.append(
+            f"hk_heat_cool_min_delta: {raw.get('hk_heat_cool_min_delta')!r} "
+            f"(allowed: number 1-10, default {DEFAULT_HK_HEAT_COOL_MIN_DELTA})"
+        )
 
     mhost = str(raw.get('hk_mqtt_host', '') or '').strip()
     if not mhost:
@@ -199,6 +242,7 @@ def normalize_flat_params(
         'hk_mqtt_client_slug': client_slug,
         'use_celsius': uc,
         'dry_run': dr,
+        'hk_heat_cool_min_delta': str(int(delta_f) if delta_f == int(delta_f) else delta_f),
     }
     return out, errs
 
