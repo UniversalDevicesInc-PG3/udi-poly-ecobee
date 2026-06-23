@@ -42,6 +42,8 @@ class HomeKitThermostat(Node):
         self.hk = hk
         # Set True after HAP ``CurrentHeatingCoolingState`` value 3 is seen (extended 4-value encoding).
         self._hap_cur_hc_four_value = False
+        self._hk_last_comfort_byte: int | None = None
+        self._hk_sp_sig_to_gv3: dict[tuple[float, float], int] = {}
         base = 'EcobeeHKC' if use_celsius else 'EcobeeHKF'
         self.drivers = deepcopy(driversMap[base])
         self.id = f'{base}_{thermostat_id}'
@@ -73,10 +75,60 @@ class HomeKitThermostat(Node):
     def set_clisph(self, val: float, from_hap_c: bool = True) -> None:
         _ = from_hap_c
         self.set_driver_safe('CLISPH', float(val))
+        self.refresh_gv3_after_hk_setpoint()
 
     def set_clispc(self, val: float, from_hap_c: bool = True) -> None:
         _ = from_hap_c
         self.set_driver_safe('CLISPC', float(val))
+        self.refresh_gv3_after_hk_setpoint()
+
+    def _configured_climate_refs(self) -> list[str]:
+        if self.hk:
+            return self.hk.command_climate_refs_for(self.thermostat_id, self.device_id_hub)
+        return []
+
+    def hk_comfort_gv3_resolver(self, hub_byte: int) -> int:
+        """Resolve IoX ``GV3`` from Ecobee HAP comfort byte (uses setpoints for Temp / byte 3)."""
+        self._hk_last_comfort_byte = int(hub_byte)
+        return self._resolve_hk_comfort_gv3()
+
+    def refresh_gv3_after_hk_setpoint(self) -> None:
+        if getattr(self, '_hk_last_comfort_byte', None) != hap_apply.ECOBEE_HK_COMFORT_TEMP:
+            return
+        gv3 = self._resolve_hk_comfort_gv3()
+        self.set_driver_safe('GV3', gv3)
+
+    def _resolve_hk_comfort_gv3(self) -> int:
+        heat = cool = None
+        try:
+            heat = float(self.getDriver('CLISPH'))
+            cool = float(self.getDriver('CLISPC'))
+        except (TypeError, ValueError):
+            pass
+        hub_byte = self._hk_last_comfort_byte if self._hk_last_comfort_byte is not None else 0
+        cache_in = getattr(self, '_hk_sp_sig_to_gv3', None) or {}
+        gv3, cache = hap_apply.resolve_hk_comfort_gv3(
+            hub_byte,
+            heat_sp=heat,
+            cool_sp=cool,
+            configured_refs=self._configured_climate_refs(),
+            sp_sig_to_gv3=cache_in,
+        )
+        self._hk_sp_sig_to_gv3 = cache
+        return gv3
+
+    def _remember_hk_comfort_signature(self, gv3: int) -> None:
+        heat = cool = None
+        try:
+            heat = float(self.getDriver('CLISPH'))
+            cool = float(self.getDriver('CLISPC'))
+        except (TypeError, ValueError):
+            return
+        if heat is None or cool is None:
+            return
+        if not hasattr(self, '_hk_sp_sig_to_gv3'):
+            self._hk_sp_sig_to_gv3 = {}
+        self._hk_sp_sig_to_gv3[hap_apply.comfort_setpoint_key(heat, cool)] = int(gv3)
 
     def set_clismd(self, val: int) -> None:
         self.set_driver_safe('CLISMD', int(val))
@@ -250,6 +302,7 @@ class HomeKitThermostat(Node):
         hub_byte = hap_apply.gv3_to_ecobee_set_hold_schedule(v)
         if self._hub_write(c, hub_byte):
             self.set_driver_safe('GV3', v)
+            self._remember_hk_comfort_signature(v)
             self._mark_hold_active(cmd)
 
     def cmd_set_schedule_mode(self, cmd):

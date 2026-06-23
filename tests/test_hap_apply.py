@@ -5,12 +5,14 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from homekit_client.hap_apply import (
+    ECOBEE_HK_COMFORT_TEMP,
     apply_characteristic_to_thermostat,
     clifs_to_hap_fan_target,
     gv3_to_ecobee_set_hold_schedule,
     hap_current_fan_state_to_clifrs,
     hap_current_heating_cooling_to_clihcs,
     iox_temp_to_hap_celsius,
+    resolve_hk_comfort_gv3,
 )
 from node_funcs import climateMap
 
@@ -180,3 +182,43 @@ def test_gv3_to_ecobee_set_hold_schedule_unknown_high_maps_to_temp():
 
 def test_clifs_to_hap_fan_auto_is_one():
     assert clifs_to_hap_fan_target(0) == 1
+
+
+def test_resolve_hk_temp_mode_maps_vacation_and_smartaway_by_setpoints():
+    """Office-style comforts: vacation (50/85) and Away Extended / smartAway (45/85) share HAP byte 3."""
+    refs = ('home', 'away', 'sleep', 'vacation', 'smartAway')
+    gv_vac, cache = resolve_hk_comfort_gv3(
+        ECOBEE_HK_COMFORT_TEMP,
+        heat_sp=50.0,
+        cool_sp=85.0,
+        configured_refs=refs,
+    )
+    assert gv_vac == climateMap['vacation']
+    gv_ext, cache = resolve_hk_comfort_gv3(
+        ECOBEE_HK_COMFORT_TEMP,
+        heat_sp=45.0,
+        cool_sp=85.0,
+        configured_refs=refs,
+        sp_sig_to_gv3=cache,
+    )
+    assert gv_ext == climateMap['smartAway']
+
+
+def test_resolve_hk_temp_mode_reuses_learned_signature():
+    refs = ('home', 'away', 'sleep', 'vacation', 'smartAway')
+    cache = {(50.0, 85.0): climateMap['vacation']}
+    gv, out = resolve_hk_comfort_gv3(
+        ECOBEE_HK_COMFORT_TEMP,
+        heat_sp=50.0,
+        cool_sp=85.0,
+        configured_refs=refs,
+        sp_sig_to_gv3=cache,
+    )
+    assert gv == climateMap['vacation']
+    assert out == cache
+
+
+def test_resolve_hk_home_byte_ignores_setpoints():
+    gv, cache = resolve_hk_comfort_gv3(0, heat_sp=45.0, cool_sp=85.0, configured_refs=('home',))
+    assert gv == climateMap['home']
+    assert cache == {}

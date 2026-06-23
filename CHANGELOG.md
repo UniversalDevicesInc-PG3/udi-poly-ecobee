@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.6] - 2026-06-23
+
+### Fixed
+
+- **HomeKit GV3 (Climate Type) status:** when Ecobee reports HAP comfort byte **3** (Temp) for comforts beyond Home / Sleep / Away (e.g. **Vacation** and **Away Extended**), **GV3** is now resolved using heat/cool setpoint signatures against the thermostat’s configured comfort list instead of always reporting **Smart1** (index 3).
+
 ## [4.1.5] - 2026-06-23
 
 ### Fixed

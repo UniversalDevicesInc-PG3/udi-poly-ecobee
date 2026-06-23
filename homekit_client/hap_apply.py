@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
 from node_funcs import climateMap, toF
 
@@ -23,7 +23,10 @@ _ECOBEE_CURRENT_MODE_UUID_NORM = normalize_hap_uuid('B7DDB9A3-54BB-4572-91D2-F1F
 _ECOBEE_HK_COMFORT_HOME = 0
 _ECOBEE_HK_COMFORT_SLEEP = 1
 _ECOBEE_HK_COMFORT_AWAY = 2
-_ECOBEE_HK_COMFORT_TEMP = 3
+ECOBEE_HK_COMFORT_TEMP = 3
+
+# Comfort refs mapped directly by HAP bytes 0–2; byte 3 (Temp) covers all other configured comforts.
+_HAP_DIRECT_COMFORT_REFS = frozenset({'home', 'away', 'sleep'})
 
 # Thermostat ``TargetFanState`` (HAP UUID …BF…). Ecobee uses **0 = On, 1 = Auto**; IoX ``CLIFS`` matches
 # cloud ``fanMap`` (**auto = 0**, **on = 1**).
@@ -52,9 +55,67 @@ def ecobee_hk_comfort_to_gv3(hub_byte: int) -> int:
         return int(climateMap['sleep'])
     if b == _ECOBEE_HK_COMFORT_AWAY:
         return int(climateMap['away'])
-    if b == _ECOBEE_HK_COMFORT_TEMP:
+    if b == ECOBEE_HK_COMFORT_TEMP:
         return int(climateMap['smart1'])
     return b
+
+
+def comfort_setpoint_key(heat_sp: float, cool_sp: float) -> Tuple[float, float]:
+    """Round setpoints for stable (heat, cool) signatures when disambiguating HAP Temp mode."""
+    return (round(float(heat_sp), 1), round(float(cool_sp), 1))
+
+
+def hk_temp_mode_extra_refs(configured_refs: Sequence[str]) -> Tuple[str, ...]:
+    """Configured comfort refs that share HAP byte 3 (Temp), in thermostat order."""
+    out: list[str] = []
+    for ref in configured_refs:
+        r = str(ref or '').strip()
+        if r and r not in _HAP_DIRECT_COMFORT_REFS:
+            out.append(r)
+    return tuple(out)
+
+
+def resolve_hk_comfort_gv3(
+    hub_byte: int,
+    *,
+    heat_sp: Optional[float] = None,
+    cool_sp: Optional[float] = None,
+    configured_refs: Optional[Sequence[str]] = None,
+    sp_sig_to_gv3: Optional[Mapping[Tuple[float, float], int]] = None,
+) -> Tuple[int, Dict[Tuple[float, float], int]]:
+    """
+    Map Ecobee HAP comfort byte → IoX ``GV3``.
+
+    Bytes 0–2 are fixed (home / sleep / away). Byte 3 (Temp) is shared by vacation, custom
+    comforts, Smart Away, etc.; when setpoints are available, match or learn a signature per
+    configured extra comfort (in thermostat order).
+    """
+    b = int(hub_byte)
+    if b != ECOBEE_HK_COMFORT_TEMP:
+        return ecobee_hk_comfort_to_gv3(b), dict(sp_sig_to_gv3 or {})
+
+    fallback = int(climateMap['smart1'])
+    cache: Dict[Tuple[float, float], int] = dict(sp_sig_to_gv3 or {})
+    if heat_sp is None or cool_sp is None:
+        return fallback, cache
+
+    sig = comfort_setpoint_key(heat_sp, cool_sp)
+    if sig in cache:
+        return int(cache[sig]), cache
+
+    extra = hk_temp_mode_extra_refs(configured_refs or ())
+    if not extra:
+        return fallback, cache
+
+    mapped = set(cache.values())
+    for ref in extra:
+        gv = int(climateMap.get(ref, fallback))
+        if gv in mapped:
+            continue
+        cache[sig] = gv
+        return gv, cache
+
+    return fallback, cache
 
 
 def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
@@ -71,10 +132,10 @@ def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
     if g == int(climateMap['away']):
         return _ECOBEE_HK_COMFORT_AWAY
     if g == int(climateMap['smart1']):
-        return _ECOBEE_HK_COMFORT_TEMP
+        return ECOBEE_HK_COMFORT_TEMP
     for name in ('smart2', 'smart3', 'smart4', 'smart5', 'smart6', 'smart7'):
         if g == int(climateMap[name]):
-            return _ECOBEE_HK_COMFORT_TEMP
+            return ECOBEE_HK_COMFORT_TEMP
     if g == int(climateMap['vacation']):
         return _ECOBEE_HK_COMFORT_AWAY
     if g == int(climateMap['smartAway']):
@@ -84,14 +145,14 @@ def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
     if g == int(climateMap['demandResponse']):
         return _ECOBEE_HK_COMFORT_AWAY
     if g == int(climateMap['unknown']):
-        return _ECOBEE_HK_COMFORT_TEMP
+        return ECOBEE_HK_COMFORT_TEMP
     if g == int(climateMap['wakeup']):
         return _ECOBEE_HK_COMFORT_HOME
     _LOG.debug(
         'gv3_to_ecobee_set_hold_schedule: GV3=%s not in climateMap hold mapping; using TEMP (3)',
         g,
     )
-    return _ECOBEE_HK_COMFORT_TEMP
+    return ECOBEE_HK_COMFORT_TEMP
 
 
 def hap_target_fan_state_to_clifs(hap_val: int) -> int:
@@ -174,6 +235,10 @@ def _climd_mode(node: 'HomeKitThermostat') -> int:
         return 3
 
 
+def _is_homekit_thermostat(node: Any) -> bool:
+    return type(node).__name__ == 'HomeKitThermostat'
+
+
 def apply_characteristic_to_thermostat(
     node: 'HomeKitThermostat',
     characteristic: str,
@@ -195,7 +260,12 @@ def apply_characteristic_to_thermostat(
                 raw = int(float(value))
             except (TypeError, ValueError):
                 return True
-        node.set_driver_safe('GV3', ecobee_hk_comfort_to_gv3(raw))
+        resolver = getattr(node, 'hk_comfort_gv3_resolver', None)
+        if _is_homekit_thermostat(node) and callable(resolver):
+            gv3 = int(resolver(int(raw)))
+        else:
+            gv3 = ecobee_hk_comfort_to_gv3(int(raw))
+        node.set_driver_safe('GV3', gv3)
         return True
 
     bucket = classify(characteristic, 0)

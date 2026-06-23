@@ -30,6 +30,7 @@ from homekit_client.mapping import remote_sensor_address, resolve_thermostat_add
 from homekit_client.profile_writer import profile_needs_update, write_ecobee_climate_profile
 from climate_typed import (
     TYPED_CLIMATE_PROGRAMS,
+    command_climates_for_thermostat,
     profile_climates_for_thermostat,
     sync_climate_typed_store,
 )
@@ -607,6 +608,20 @@ class HomeKitBackend:
         except Exception:
             LOGGER.debug('typed list %s unavailable', key, exc_info=True)
             return []
+
+    def command_climate_refs_for(
+        self,
+        thermostat_id: str,
+        device_id: Optional[str] = None,
+    ) -> List[str]:
+        """Configured comfort ``climateRef`` values for one thermostat (typed data order)."""
+        rows = self._typed_list(TYPED_CLIMATE_PROGRAMS)
+        climates = command_climates_for_thermostat(
+            rows,
+            thermostat_id,
+            device_id=device_id,
+        )
+        return [str(c.get('ref', '') or '').strip() for c in climates if str(c.get('ref', '') or '').strip()]
 
     def _existing_t_addresses(self) -> List[str]:
         out: List[str] = []
