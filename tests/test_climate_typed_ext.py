@@ -60,3 +60,27 @@ def test_sync_climate_typed_store_preserves_learned_setpoints():
         smart1 = next(c for c in row['climates'] if c['climateRef'] == 'smart1')
         assert smart1.get('heat') == '68'
         assert smart1.get('cool') == '72'
+
+
+def test_sync_climate_typed_store_idempotent_when_setpoints_present():
+    """Repeated hub sync must not re-save typed data (Polyglot echo loop)."""
+    store = MagicMock()
+    store.keys.return_value = ['climate_programs']
+    store.__getitem__.side_effect = lambda k: {
+        'climate_programs': [
+            {
+                'thermostat_id': '001',
+                'name': 'Downstairs',
+                'climates': [
+                    {'climateRef': 'home', 'name': 'Home'},
+                    {'climateRef': 'smart1', 'name': 'Workshop', 'heat': '68', 'cool': '72'},
+                ],
+            }
+        ]
+    }[k]
+
+    specs = [{'thermostat_id': '001', 'name': 'Downstairs', 'api_climates': [{'ref': 'home', 'name': 'Home'}]}]
+    sync_climate_typed_store(store, specs)
+    store.reset_mock()
+    sync_climate_typed_store(store, specs)
+    store.load.assert_not_called()

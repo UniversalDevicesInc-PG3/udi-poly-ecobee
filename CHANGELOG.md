@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.9] - 2026-06-19
+
+### Fixed
+
+- **HomeKit typed-data feedback loop:** saving **Climate program labels** no longer re-runs hub device discovery. ``sync_climate_typed_store`` now preserves learned ``heat`` / ``cool`` during merge so repeated hub syncs do not spuriously rewrite typed data and echo through ``handler_typed_data``.
+
 ## [4.1.8] - 2026-06-23
 
 ### Fixed

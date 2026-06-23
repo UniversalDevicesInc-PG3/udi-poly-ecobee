@@ -384,9 +384,6 @@ class HomeKitBackend:
                 self._maybe_update_profile(climates)
         except Exception:
             LOGGER.exception('HomeKit typed data profile refresh failed')
-        devs = self._ws.devices if self._ws else []
-        if devs:
-            self._on_list_devices(devs)
 
     def handler_log_level(self, level):
         lvl = level.get('level', 10) if isinstance(level, dict) else 10

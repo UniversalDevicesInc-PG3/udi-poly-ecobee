@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from climate_typed import (
     TYPED_CLIMATE_PROGRAMS,
+    _DEFAULT_SEED_REFS,
+    _api_climate_map,
+    _climate_name_is_default,
     _climate_ref_from_row,
     _thermostat_row_key,
+    _typed_climate_program_rows,
+    climateMap,
     climate_typed_params_section,
+    default_climate_label,
     find_thermostat_typed_row,
-    sync_climate_typed_store as _sync_climate_typed_store,
+    seed_climate_rows,
     typed_data_dict,
 )
 from node_funcs import climateList as DEFAULT_CLIMATE_CATALOG
@@ -111,70 +117,123 @@ def sync_learned_setpoint_in_typed_store(
     return True
 
 
-def _setpoints_by_thermostat_key(
-    rows: Optional[Iterable[Mapping[str, object]]],
-) -> Dict[str, Dict[str, Dict[str, str]]]:
-    """Snapshot ``heat`` / ``cool`` nested fields before typed merge overwrites them."""
-    out: Dict[str, Dict[str, Dict[str, str]]] = {}
-    for row in rows or ():
-        if not isinstance(row, dict):
-            continue
-        key = _thermostat_row_key(row)
-        if not key or not isinstance(row.get('climates'), list):
-            continue
-        by_ref: Dict[str, Dict[str, str]] = {}
-        for c in row['climates']:
-            if not isinstance(c, dict):
-                continue
-            ref = _climate_ref_from_row(c)
-            if not ref:
-                continue
-            fields: Dict[str, str] = {}
-            for band in ('heat', 'cool'):
-                raw = c.get(band)
-                if raw is not None and str(raw).strip() != '':
-                    fields[band] = str(raw).strip()
-            if fields:
-                by_ref[ref] = fields
-        if by_ref:
-            out[key] = by_ref
-    return out
-
-
-def _restore_preserved_comfort_setpoints(
-    rows: List[Dict[str, Any]],
-    preserved: Mapping[str, Mapping[str, Mapping[str, str]]],
-) -> tuple[List[Dict[str, Any]], bool]:
-    if not preserved:
-        return rows, False
+def _merge_climate_list_preserve_setpoints(
+    existing: Optional[List[Dict[str, str]]],
+    *,
+    api_climates: Optional[Iterable[Mapping[str, object]]] = None,
+    climate_catalog: Sequence[str] = DEFAULT_CLIMATE_CATALOG,
+) -> Tuple[List[Dict[str, str]], bool]:
+    """Like :func:`climate_typed._merge_climate_list`, but keeps ``heat`` / ``cool`` fields."""
+    api = _api_climate_map(api_climates)
+    by_ref: Dict[str, Dict[str, str]] = {}
     changed = False
-    out: List[Dict[str, Any]] = []
+    for row in existing or ():
+        ref = _climate_ref_from_row(row)
+        if not ref:
+            continue
+        entry: Dict[str, str] = {
+            'climateRef': ref,
+            'name': str(row.get('name', '') or '').strip() or default_climate_label(ref),
+        }
+        for band in ('heat', 'cool'):
+            raw = row.get(band)
+            if raw is not None and str(raw).strip() != '':
+                entry[band] = str(raw).strip()
+        by_ref[ref] = entry
+
+    seed_refs = list(api.keys()) if api else [r for r in _DEFAULT_SEED_REFS if r in climateMap]
+    for ref in seed_refs:
+        api_name = api.get(ref, '')
+        if ref not in by_ref:
+            by_ref[ref] = {'climateRef': ref, 'name': api_name or default_climate_label(ref)}
+            changed = True
+            continue
+        cur = by_ref[ref]['name']
+        if api_name and _climate_name_is_default(ref, cur) and cur != api_name:
+            by_ref[ref]['name'] = api_name
+            changed = True
+
+    ordered: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    for ref in climate_catalog:
+        if ref in by_ref:
+            ordered.append(by_ref[ref])
+            seen.add(ref)
+    for ref, row in by_ref.items():
+        if ref not in seen:
+            ordered.append(row)
+    return ordered, changed
+
+
+def ensure_climate_typed_data_preserve_setpoints(
+    existing_rows: Optional[Iterable[Mapping[str, object]]],
+    thermostats: Iterable[Mapping[str, object]],
+    *,
+    climate_catalog: Sequence[str] = DEFAULT_CLIMATE_CATALOG,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Like :func:`climate_typed.ensure_climate_typed_data`, but keeps hub-learned setpoints."""
+    rows = _typed_climate_program_rows(existing_rows)
+    by_key: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
     for row in rows:
-        if not isinstance(row, dict):
-            out.append(row)
+        key = _thermostat_row_key(row)
+        if not key:
             continue
-        entry = dict(row)
-        key = _thermostat_row_key(entry)
-        keep = preserved.get(key) if key else None
-        if not keep or not isinstance(entry.get('climates'), list):
-            out.append(entry)
+        by_key[key] = dict(row)
+        if key not in order:
+            order.append(key)
+
+    changed = False
+
+    for spec in thermostats:
+        tid = str(spec.get('thermostat_id', '') or '').strip()
+        if not tid:
             continue
-        climates: List[Dict[str, Any]] = []
-        for c in entry['climates']:
-            if not isinstance(c, dict):
-                climates.append(c)
-                continue
-            cref = _climate_ref_from_row(c)
-            merged = dict(c)
-            sp = keep.get(cref) if cref else None
-            if sp:
-                for band in ('heat', 'cool'):
-                    if band in sp and str(merged.get(band, '')) != sp[band]:
-                        merged[band] = sp[band]
-                        changed = True
-            climates.append(merged)
-        entry['climates'] = climates
-        out.append(entry)
+        display = str(spec.get('name', '') or '').strip()
+        did = str(spec.get('device_id', '') or '').strip().lower()
+        api_climates = spec.get('api_climates')
+
+        row = find_thermostat_typed_row(list(by_key.values()), thermostat_id=tid, device_id=did or None)
+        key = f'id:{tid}'
+        if row is None:
+            row = {
+                'thermostat_id': tid,
+                'name': display,
+                'device_id': did,
+                'climates': seed_climate_rows(api_climates=api_climates, climate_catalog=climate_catalog),
+            }
+            by_key[key] = row
+            if key not in order:
+                order.append(key)
+            changed = True
+        else:
+            key = _thermostat_row_key(row) or key
+            row = dict(by_key[key])
+            if display and not str(row.get('name', '') or '').strip():
+                row['name'] = display
+                changed = True
+            if did and not str(row.get('device_id', '') or '').strip():
+                row['device_id'] = did
+                changed = True
+            if not str(row.get('thermostat_id', '') or '').strip():
+                row['thermostat_id'] = tid
+                changed = True
+
+        climates, c_changed = _merge_climate_list_preserve_setpoints(
+            row.get('climates') if isinstance(row.get('climates'), list) else [],
+            api_climates=api_climates,
+            climate_catalog=climate_catalog,
+        )
+        if c_changed:
+            row['climates'] = climates
+            changed = True
+        elif row.get('climates') != climates:
+            row['climates'] = climates
+        by_key[key] = row
+        if key not in order:
+            order.append(key)
+
+    out = [by_key[k] for k in order if k in by_key]
     return out, changed
 
 
@@ -185,18 +244,19 @@ def sync_climate_typed_store(
     climate_catalog: Sequence[str] = DEFAULT_CLIMATE_CATALOG,
 ) -> List[Dict[str, Any]]:
     """
-    Like :func:`climate_typed.sync_climate_typed_store`, but keeps hub-learned ``heat`` / ``cool``.
+    Ensure nested climate typed rows exist and persist when changed.
+
+    Preserves hub-learned ``heat`` / ``cool`` during merge so repeated hub syncs do not
+    spuriously rewrite typed data (which would echo back through ``handler_typed_data``).
     """
     td = typed_data_dict(typed_data)
     existing = td.get(TYPED_CLIMATE_PROGRAMS)
-    preserved = _setpoints_by_thermostat_key(existing if isinstance(existing, list) else None)
-    rows = _sync_climate_typed_store(
-        typed_data,
+    rows, changed = ensure_climate_typed_data_preserve_setpoints(
+        existing if isinstance(existing, list) else None,
         thermostats,
         climate_catalog=climate_catalog,
     )
-    rows, restored = _restore_preserved_comfort_setpoints(rows, preserved)
-    if restored:
+    if changed:
         td[TYPED_CLIMATE_PROGRAMS] = rows
         typed_data.load(td, save=True)
     return rows
