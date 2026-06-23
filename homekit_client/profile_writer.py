@@ -20,42 +20,82 @@ def homekit_gv3_command_subset_hi() -> int:
     )
 
 
+def _climate_index_from_row(
+    row: Mapping[str, object],
+    climate_catalog: Sequence[str],
+) -> Optional[int]:
+    """Resolve a typed/API row to a ``climateList`` index via ``ref`` or ``index``."""
+    ref = str(row.get('ref', '') or row.get('climateRef', '') or '').strip()
+    if ref:
+        if ref in climateMap:
+            return int(climateMap[ref])
+        if ref in climate_catalog:
+            return int(climate_catalog.index(ref))
+    try:
+        idx = int(row.get('index', -1))
+    except (TypeError, ValueError):
+        return None
+    if idx < 0 or idx >= len(climate_catalog):
+        return None
+    return idx
+
+
+def climate_command_subset_hi(
+    climate_rows: Optional[Iterable[Mapping[str, object]]],
+    climate_catalog: Sequence[str],
+    *,
+    default_hi: Optional[int] = None,
+) -> int:
+    """
+    Inclusive high IoX index for cloud **GV3** command editor (**CT_***) for one thermostat.
+
+    Uses climates present on the device (API ``program.climates`` or typed rows). Falls back to
+  ``default_hi`` or the catalog high index when no rows are known.
+    """
+    hi = -1
+    for row in climate_rows or ():
+        idx = _climate_index_from_row(row, climate_catalog)
+        if idx is not None:
+            hi = max(hi, idx)
+    if hi >= 0:
+        return hi
+    if default_hi is not None:
+        return int(default_hi)
+    return max(0, len(climate_catalog) - 1)
+
+
 def homekit_climate_details_for_device(
     hub_device_id: str,
     typed_program_rows: Optional[Iterable[Mapping[str, object]]],
     climate_catalog: Sequence[str],
     *,
+    thermostat_id: Optional[str] = None,
     skip_catalog_indices: Optional[Set[int]] = None,
 ) -> List[Dict[str, str]]:
     """
-    Build the same structure cloud uses for one thermostat: ordered ``{'ref','name'}`` entries.
+    Build profile rows for one thermostat from nested typed climate data.
 
-    Typed rows match ``device_id`` (hub pairing id) and optional integer ``index`` into
-    *climate_catalog*; ``name`` overrides the default ucfirst label for that slot.
-
-    *skip_catalog_indices*: optional indices **not** overridden from typed rows (rare; backend-specific).
+    Prefer :func:`climate_typed.profile_climates_for_thermostat` for new code.
     """
-    hub = str(hub_device_id or '').strip().lower()
-    skip = skip_catalog_indices or set()
-    overrides: Dict[int, str] = {}
-    for row in typed_program_rows or ():
-        if str(row.get('device_id', '')).strip().lower() != hub:
-            continue
-        try:
-            idx = int(row.get('index', -1))
-        except (TypeError, ValueError):
-            continue
-        if idx in skip:
-            continue
-        if idx < 0 or idx >= len(climate_catalog):
-            continue
-        name = str(row.get('name', '') or '').strip()
-        if name:
-            overrides[idx] = name
+    from climate_typed import profile_climates_for_thermostat
+
+    tid = str(thermostat_id or '').strip()
+    rows = profile_climates_for_thermostat(
+        typed_program_rows,
+        tid,
+        device_id=hub_device_id,
+        climate_catalog=climate_catalog,
+    )
+    if not skip_catalog_indices:
+        return rows
     out: List[Dict[str, str]] = []
-    for i, ref in enumerate(climate_catalog):
-        default = ref[0].upper() + ref[1:] if ref else str(i)
-        out.append({'ref': ref, 'name': overrides.get(i, default)})
+    for i, row in enumerate(rows):
+        if i in skip_catalog_indices:
+            ref = row.get('ref', '')
+            default = ref[0].upper() + ref[1:] if ref else str(i)
+            out.append({'ref': ref, 'name': default})
+        else:
+            out.append(row)
     return out
 
 
@@ -145,7 +185,7 @@ def write_ecobee_climate_profile(
                     for line in in_h:
                         nodedef_h.write(re.sub(r'tstatid', f'{tid}', line))
             cnt_a = max(0, len(climate_catalog) - 1)
-            cnt = max(0, len(climate_catalog) - 5)
+            cnt = climate_command_subset_hi(climates[tid], climate_catalog)
             hk_hi = homekit_gv3_command_subset_hi()
             with open(editors_template, 'r', encoding='utf-8') as in_h:
                 for line in in_h:

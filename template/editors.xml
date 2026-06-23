@@ -2,8 +2,8 @@
     <range uom="25" subset="0-tstatcnta" nls="CT_tstatid" />
   </editor>
   <editor id="CT_tstatid">
-    <!-- Would like to use tstatcnt isntead of tstatcnta so only available selections are shown in status, but need all in programs for checking status --> 
-    <range uom="25" subset="0-tstatcnta" nls="CT_tstatid" />
+    <!-- Per-thermostat subset: only comforts configured on the stat (``tstatcnt``). Status uses ``CTA_*`` / full ``tstatcnta``. -->
+    <range uom="25" subset="0-tstatcnt" nls="CT_tstatid" />
   </editor>
   <!-- HomeKit VENDOR_ECOBEE_SET_HOLD_SCHEDULE: IoX GV3 indices away/home/sleep/smart1 (0-3). -->
   <editor id="CT_HK_tstatid">

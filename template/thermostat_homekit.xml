@@ -12,7 +12,7 @@
       <st id="CLIFRS" editor="I_TSTAT_FAN_STATE" />
       <st id="GV1" editor="I_TSTAT_HUM_SET" />
       <st id="CLISMD" editor="I_TSTAT_PROG_MODE2" />
-      <st id="GV3" editor="CT_HK_tstatid" />
+      <st id="GV3" editor="CTA_tstatid" />
     </sts>
     <cmds>
       <accepts>
@@ -59,7 +59,7 @@
       <st id="CLIFRS" editor="I_TSTAT_FAN_STATE" />
       <st id="GV1" editor="I_TSTAT_HUM_SET" />
       <st id="CLISMD" editor="I_TSTAT_PROG_MODE2" />
-      <st id="GV3" editor="CT_HK_tstatid" />
+      <st id="GV3" editor="CTA_tstatid" />
     </sts>
     <cmds>
       <accepts>

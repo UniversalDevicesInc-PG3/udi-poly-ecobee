@@ -7,23 +7,36 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.4] - 2026-06-23
+
+### Added
+
+- **Per-thermostat comfort lists (cloud):** **GV3** (Climate Type) commands list only comforts configured on each thermostat (from the Ecobee API), with **custom names** from your program (e.g. “Workshop” instead of **Smart2**).
+- **Climate program labels (Custom Typed Data):** nested **Climate program labels** — one row per thermostat (`thermostat_id`, display **name**, optional HomeKit **device_id**) with a nested **climates** list (`climateRef` + display **name**). Rows are **auto-created** on **DISCOVER** (cloud) or when HomeKit hub devices are listed; cloud fills names from the Ecobee API when still at defaults.
+
+### Changed
+
+- **HomeKit GV3** (Climate Type) **status:** comfort **status** uses the full **CTA_*** label range (custom names for all indices). **GV3** (Climate Type) **commands** stay on **CT_HK_*** (Home / Sleep / Away / Temp only — Ecobee HomeKit vendor limit).
+- **Cloud GV3** (Climate Type) **command editor:** per-thermostat **CT_*** subset (configured comforts only) instead of a fixed catalog slice.
+- **Profile (IoX nodedef):** version **4.1.9** — climate label and editor updates above. Restart the Node Server and **Load Profile** after upgrade.
+
 ## [4.1.3] - 2026-06-19
 
 ### Added
 
-- **HomeKit resume schedule:** **CLISMD = Running (0)** sends the Ecobee vendor **clear hold** sequence on the hub (`VENDOR_ECOBEE_CLEAR_HOLD`), then schedules a debounced thermostat snapshot refresh so IoX setpoints and hold state match the stat after the hold clears.
-- **HomeKit hold / comfort UX:** HomeKit thermostats expose **Climate Type (`GV3`)** and **Schedule Mode (`CLISMD`)** as **separate** IoX controls (not a coupled comfort + HoldType multi-select like cloud). Change comfort alone, hold type alone, or both in sequence.
+- **HomeKit resume schedule:** **CLISMD** (Schedule Mode) = **Running** (0) sends the Ecobee vendor **clear hold** sequence on the hub (`VENDOR_ECOBEE_CLEAR_HOLD`), then schedules a debounced thermostat snapshot refresh so IoX setpoints and hold state match the stat after the hold clears.
+- **HomeKit hold / comfort UX:** HomeKit thermostats expose **GV3** (Climate Type) and **CLISMD** (Schedule Mode) as **separate** IoX controls (not a coupled comfort + HoldType multi-select like cloud). Change comfort alone, hold type alone, or both in sequence.
 
 ### Changed
 
-- **HomeKit `GV3` profile:** status and command both use **`CT_HK_*`** (away / home / sleep / smart1 only). Comfort-only writes default to **Hold Next** (`CLISMD = 1`) in the backend when no hold type is specified.
-- **Cloud `GV3` holds:** optional **HoldType** on climate commands defaults to **Hold Next** when omitted, so the admin UI no longer requires setting comfort and hold type together.
+- **HomeKit `GV3` (Climate Type) profile:** status and command both use **`CT_HK_*`** (away / home / sleep / smart1 only). Comfort-only writes default to **Hold Next** (**CLISMD** (Schedule Mode) = 1) in the backend when no hold type is specified.
+- **Cloud `GV3` (Climate Type) holds:** optional **HoldType** on climate commands defaults to **Hold Next** when omitted, so the admin UI no longer requires setting comfort and hold type together.
 - **User setup docs:** restructured **CONFIG.md** as the primary HomeKit setup guide with step-by-step quick start, hub/Ecobee defaults checklist, verify/troubleshooting sections, and **Reference: HomeKit behavior vs cloud** (moved from README). **README.md** trimmed to help links and CONFIG pointers.
 - **Profile (IoX nodedef):** version **4.1.7** — HomeKit thermostat template updates above; **4.1.5** fixed non-ASCII punctuation in generated editor XML. After upgrade, restart the Node Server and **Load Profile** if release notes mention **Profile Change**.
 
 ### Fixed
 
-- **HomeKit clear-hold UI refresh:** immediately after **CLISMD = Running**, a hub snapshot could still report stale hold setpoints until **QUERY**; the debounced refresh after clear-hold updates drivers without a manual query.
+- **HomeKit clear-hold UI refresh:** immediately after **CLISMD** (Schedule Mode) = **Running**, a hub snapshot could still report stale hold setpoints until **QUERY**; the debounced refresh after clear-hold updates drivers without a manual query.
 
 ## [4.1.2] - 2026-05-25
 
@@ -43,11 +56,11 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Changed
 
-- **HomeKit thermostat profile:** **GV3** **commands** use editor **CT_HK_\<tstat\>** with subset **0–3** (IoX **away / home / sleep / smart1**) so the IoX UI cannot select hold values the Ecobee HomeKit vendor characteristic rejects. **GV3** **status** keeps the full **CTA_\<tstat\>** range for label resolution. **README** / **CONFIG.md** document the four hold slots vs the Ecobee app.
+- **HomeKit thermostat profile:** **GV3** (Climate Type) **commands** use editor **CT_HK_\<tstat\>** with subset **0–3** (IoX **away / home / sleep / smart1**) so the IoX UI cannot select hold values the Ecobee HomeKit vendor characteristic rejects. **GV3** (Climate Type) **status** keeps the full **CTA_\<tstat\>** range for label resolution. **README** / **CONFIG.md** document the four hold slots vs the Ecobee app.
 
 ### Fixed
 
-- **HomeKit GV3 writes:** map remaining **climateList** indices to valid **SET_HOLD** bytes before sending to the hub (avoids HAP **-70410** for e.g. vacation). See **`homekit_client/hap_apply.py`** ``gv3_to_ecobee_set_hold_schedule``.
+- **HomeKit GV3** (Climate Type) **writes:** map remaining **climateList** indices to valid **SET_HOLD** bytes before sending to the hub (avoids HAP **-70410** for e.g. vacation). See **`homekit_client/hap_apply.py`** ``gv3_to_ecobee_set_hold_schedule``.
 
 ## [4.0.9] - 2026-05-10
 
@@ -59,7 +72,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed
 
-- **HomeKit thermostat (°F):** HAP writes use **0.1 °C** steps; naive Fahrenheit→Celsius rounding can land just **above** the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F**), and Ecobee’s display then shows **+1 °F**. **`iox_temp_to_hap_celsius`** now accepts **`fahrenheit_wire_bias`**: **low** for cooling / **CLISPC** (lowest compatible 0.1 °C bin per **`toF`**) and **high** for heating / **CLISPH**.
+- **HomeKit thermostat (°F):** HAP writes use **0.1 °C** steps; naive Fahrenheit→Celsius rounding can land just **above** the target whole °F on the wire (e.g. **75 °F → 23.9 °C → 75.02 °F**), and Ecobee’s display then shows **+1 °F**. **`iox_temp_to_hap_celsius`** now accepts **`fahrenheit_wire_bias`**: **low** for cooling / **CLISPC** (Cool Setpoint; lowest compatible 0.1 °C bin per **`toF`**) and **high** for heating / **CLISPH** (Heat Setpoint).
 
 ## [4.0.7] - 2026-05-09
 
@@ -71,7 +84,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed
 
-- **Profile NLS (Profile Change):** add missing remote-sensor driver names for the `140ES` editor — **CLIHUM** (`Humidity`), **BATLVL** (`Battery Level`), and **BATLOW** (`Battery Low`). The `EcobeeSensor*` nodedefs publish all three but the IoX UI was rendering them without labels.
+- **Profile NLS (Profile Change):** add missing remote-sensor driver names for the `140ES` editor — **CLIHUM** (Humidity), **BATLVL** (`Battery Level`), and **BATLOW** (`Battery Low`). The `EcobeeSensor*` nodedefs publish all three but the IoX UI was rendering them without labels.
 
 ## [4.0.5] - 2026-05-08
 
@@ -83,7 +96,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed
 
-- **Profile NLS (Profile Change):** add missing controller names for **GV4** (`HomeKit WebSocket`) / **GV5** (`HomeKit MQTT`) HomeKit transport status drivers and **HKTR** enum labels (`Not Selected` / `Not Connected` / `Connected`) used by the `hktr` editor.
+- **Profile NLS (Profile Change):** add missing controller names for **GV4** (HomeKit WebSocket) / **GV5** (HomeKit MQTT) HomeKit transport status drivers and **HKTR** enum labels (`Not Selected` / `Not Connected` / `Connected`) used by the `hktr` editor.
 
 ## [4.0.3] - 2026-05-08
 
@@ -111,7 +124,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed
 
-- **Controller GV4/GV5 (HomeKit transport status):** merge Polyglot `CONFIG` driver rows into the full **`ECO_CTR`** template from **`const.driversMap`** instead of replacing in-memory drivers with only PG3’s subset. Prevents **`setDriver('GV4'|'GV5')`** *Invalid driver* when IoX has not yet persisted new hub-transport status drivers, so WebSocket/MQTT tri-state updates correctly.
+- **Controller** **GV4** (HomeKit WebSocket) / **GV5** (HomeKit MQTT) (HomeKit transport status): merge Polyglot `CONFIG` driver rows into the full **`ECO_CTR`** template from **`const.driversMap`** instead of replacing in-memory drivers with only PG3’s subset. Prevents **`setDriver('GV4'|'GV5')`** *Invalid driver* when IoX has not yet persisted new hub-transport status drivers, so WebSocket/MQTT tri-state updates correctly.
 
 ## [4.0.0] - 2026-05-02
 

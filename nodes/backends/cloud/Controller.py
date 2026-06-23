@@ -17,6 +17,11 @@ from copy import deepcopy
 
 from pathlib import Path
 
+from climate_typed import (
+    TYPED_CLIMATE_PROGRAMS,
+    profile_climates_for_thermostat,
+    sync_climate_typed_store,
+)
 from homekit_client.profile_writer import profile_needs_update, write_ecobee_climate_profile
 from pgSession import pgSession
 from .Thermostat import Thermostat
@@ -56,6 +61,7 @@ class CloudBackend:
         self.Notices = dispatcher.Notices
         self.Data = dispatcher.Data
         self.Params = dispatcher.Params
+        self.TypedData = dispatcher.TypedData
         self.serverdata = self.poly.serverdata
 
     '''
@@ -693,22 +699,36 @@ class CloudBackend:
 
     def check_profile(self,thermostats):
         self.profile_info = get_profile_info(LOGGER)
-        #
-        # First get all the climate programs so we can build the profile if necessary
-        #
-        climates = dict()
+        api_by_tid: dict = {}
+        typed_specs = []
         for thermostatId, thermostat in thermostats.items():
-            # Only get program data if we have the node.
             fullData = self.getThermostatSelection(thermostatId,includeProgram=True)
+            api_list = []
             if fullData is not False:
                 programs = fullData['thermostatList'][0]['program']
-                climates[thermostatId] = list()
                 for climate in programs['climates']:
-                    climates[thermostatId].append({'name': climate['name'], 'ref':climate['climateRef']})
+                    api_list.append({'name': climate['name'], 'ref': climate['climateRef']})
+            api_by_tid[thermostatId] = api_list
+            typed_specs.append(
+                {
+                    'thermostat_id': str(thermostatId),
+                    'name': thermostat.get('name', ''),
+                    'api_climates': api_list,
+                }
+            )
+        try:
+            typed_rows = sync_climate_typed_store(self.TypedData, typed_specs)
+        except Exception:
+            LOGGER.exception('check_profile: climate typed data sync failed')
+            typed_rows = []
+        climates = {}
+        for thermostatId in thermostats:
+            climates[thermostatId] = profile_climates_for_thermostat(
+                typed_rows,
+                str(thermostatId),
+                api_climates=api_by_tid.get(thermostatId),
+            )
         LOGGER.debug("check_profile: climates={}".format(climates))
-        #
-        # Set Default profile version if not Found
-        #
         LOGGER.info('check_profile: profile_info={}'.format(self.profile_info))
         LOGGER.info('check_profile:   customData={}'.format(self.Data))
         data_dump = customdata_user_snapshot(self.Data)
@@ -723,6 +743,37 @@ class CloudBackend:
             )
             self.poly.updateProfile()
             self.Data['profile_info'] = self.profile_info
+            self.Data['climates'] = climates
+
+    def handler_typed_data(self, data):
+        if data is not None:
+            self.TypedData.load(data)
+        stored = self.Data.get('climates')
+        if not isinstance(stored, dict) or not stored:
+            return
+        typed_rows = []
+        try:
+            raw = self.TypedData[TYPED_CLIMATE_PROGRAMS]
+            typed_rows = raw if isinstance(raw, list) else []
+        except Exception:
+            typed_rows = []
+        climates = {}
+        for thermostatId in stored:
+            climates[thermostatId] = profile_climates_for_thermostat(
+                typed_rows,
+                str(thermostatId),
+                api_climates=stored.get(thermostatId),
+            )
+        data_dump = customdata_user_snapshot(self.Data)
+        if profile_needs_update(data_dump, get_profile_info(LOGGER).get('version', ''), climates):
+            write_ecobee_climate_profile(
+                Path('.'),
+                climates,
+                log_prefix='{}:typed_profile:'.format(self.address),
+                logger=LOGGER,
+            )
+            self.poly.updateProfile()
+            self.Data['profile_info'] = get_profile_info(LOGGER)
             self.Data['climates'] = climates
 
     # Calls session.get and converts params to weird ecobee formatting.

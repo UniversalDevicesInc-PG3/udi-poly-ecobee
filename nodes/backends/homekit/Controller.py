@@ -27,10 +27,10 @@ from homekit_client.char_map import (
     thermostat_control_aid_from_snapshot_values,
 )
 from homekit_client.mapping import remote_sensor_address, resolve_thermostat_address
-from homekit_client.profile_writer import (
-    homekit_climate_details_for_device,
-    profile_needs_update,
-    write_ecobee_climate_profile,
+from climate_typed import (
+    TYPED_CLIMATE_PROGRAMS,
+    profile_climates_for_thermostat,
+    sync_climate_typed_store,
 )
 from node_funcs import (
     climateList,
@@ -48,7 +48,6 @@ from .Thermostat import HomeKitThermostat
 # Must match typed param ``name`` in :class:`nodes.Controller` (schema only; avoid importing Controller).
 _TYPED_HK_ID_OVERRIDES = 'hk_id_overrides'
 _TYPED_HK_SENSOR_OVERRIDES = 'hk_sensor_overrides'
-_TYPED_CLIMATE_PROGRAMS = 'climate_programs'
 
 # HAP UUIDs: hub may emit only UUID strings; refresh snapshot when these change (picks up GV3 etc.).
 _THERM_SNAPSHOT_REFRESH_UUID_NORM = frozenset(
@@ -947,9 +946,10 @@ class HomeKitBackend:
             )
         else:
             self._list_devices_topology_fp = topo_fp
-        rows_climate = self._typed_list(_TYPED_CLIMATE_PROGRAMS)
+        rows_climate = self._typed_list(TYPED_CLIMATE_PROGRAMS)
         existing = self._existing_t_addresses()
         climates: Dict[str, List[Dict[str, str]]] = {}
+        typed_specs: List[Dict[str, Any]] = []
         pairs: List[tuple] = []
         for dev in thermostats:
             did = self._hub_device_id(dev)
@@ -972,8 +972,30 @@ class HomeKitBackend:
             if addr not in existing:
                 existing.append(addr)
             key = addr[1:] if addr.startswith('t') else addr
-            climates[key] = homekit_climate_details_for_device(did, rows_climate, climateList)
+            typed_specs.append(
+                {
+                    'thermostat_id': key,
+                    'name': display_name,
+                    'device_id': did,
+                }
+            )
             pairs.append((dev, addr, key))
+        try:
+            rows_climate = sync_climate_typed_store(
+                self.TypedData,
+                typed_specs,
+                climate_catalog=climateList,
+            )
+        except Exception:
+            LOGGER.exception('HomeKit climate typed data sync failed')
+        for _dev, _addr, key in pairs:
+            did = self._hub_device_id(_dev).strip().lower()
+            climates[key] = profile_climates_for_thermostat(
+                rows_climate,
+                key,
+                device_id=did,
+                climate_catalog=climateList,
+            )
         try:
             self._maybe_update_profile(climates)
         except Exception:

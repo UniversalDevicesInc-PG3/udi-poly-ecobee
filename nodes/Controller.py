@@ -25,12 +25,13 @@ from params_flat import (
     normalize_flat_params,
 )
 
+TYPED_HK_ID_OVERRIDES = 'hk_id_overrides'
+TYPED_HK_SENSOR_OVERRIDES = 'hk_sensor_overrides'
+
 # PG3 only lists Custom Params that exist in saved config; seed missing keys on load (Kasa/HomeKit pattern).
 _DEFAULT_CUSTOM_PARAMS = {**DEFAULT_EFFECTIVE, 'api_key': ''}
 
-TYPED_HK_ID_OVERRIDES = 'hk_id_overrides'
-TYPED_HK_SENSOR_OVERRIDES = 'hk_sensor_overrides'
-TYPED_CLIMATE_PROGRAMS = 'climate_programs'
+from climate_typed import TYPED_CLIMATE_PROGRAMS, climate_typed_params_section
 
 
 class Controller(Node):
@@ -138,18 +139,7 @@ class Controller(Node):
                         {'name': 'notes', 'title': 'notes', 'isRequired': False},
                     ],
                 },
-                {
-                    'name': TYPED_CLIMATE_PROGRAMS,
-                    'title': 'Climate program labels',
-                    'desc': 'Friendly names for VENDOR_ECOBEE_CURRENT_MODE indices (per device_id).',
-                    'isList': True,
-                    'params': [
-                        {'name': 'device_id', 'title': 'device_id', 'isRequired': False},
-                        {'name': 'index', 'title': 'mode index', 'isRequired': False},
-                        {'name': 'name', 'title': 'display name', 'isRequired': False},
-                        {'name': 'notes', 'title': 'notes', 'isRequired': False},
-                    ],
-                },
+                climate_typed_params_section(),
             ],
             True,
         )

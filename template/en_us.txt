@@ -59,6 +59,14 @@ ND-EcobeeWeatherF-NAME = Ecobee Weather (F)
 ND-EcobeeWeatherF-ICON = Weather
 
 ST-140E-ST-NAME = Temperature
+ST-140E-CLISPH-NAME = Heat Setpoint
+ST-140E-CLISPC-NAME = Cool Setpoint
+ST-140E-CLIMD-NAME = Mode
+ST-140E-CLIFS-NAME = Fan Mode
+ST-140E-CLIHUM-NAME = Humidity
+ST-140E-CLIHCS-NAME = HVAC State
+ST-140E-CLIFRS-NAME = Fan State
+ST-140E-CLISMD-NAME = Schedule Mode
 ST-140E-GV1-NAME = Humidification Setpoint
 ST-140E-GV3-NAME = Climate Type
 ST-140E-GV4-NAME = Fan On Time
