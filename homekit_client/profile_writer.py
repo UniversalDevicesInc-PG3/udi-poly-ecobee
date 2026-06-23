@@ -186,7 +186,8 @@ def write_ecobee_climate_profile(
                         nodedef_h.write(re.sub(r'tstatid', f'{tid}', line))
             cnt_a = max(0, len(climate_catalog) - 1)
             cnt = climate_command_subset_hi(climates[tid], climate_catalog)
-            hk_hi = homekit_gv3_command_subset_hi()
+            # HomeKit **Climate Type** commands list the same configured comforts as cloud (not 0–3 only).
+            hk_hi = cnt
             with open(editors_template, 'r', encoding='utf-8') as in_h:
                 for line in in_h:
                     line = re.sub(r'tstatid', f'{tid}', line)

@@ -7,6 +7,23 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.8] - 2026-06-23
+
+### Fixed
+
+- **HomeKit Climate Type commands:** the command picker now lists **all configured comforts** on each thermostat (same subset and custom names as cloud), not only Home / Sleep / Away / Smart1 (0–3). Selecting a custom comfort uses stored program setpoints or hub-learned cache before sending the HomeKit hold.
+
+### Added
+
+- **Program setpoint cache:** cloud **DISCOVER** stores per-comfort heat/cool from the Ecobee API in ``customData.climate_setpoints``. HomeKit **QUERY** / startup snapshot seeds the command cache from that data plus vendor **Home / Sleep / Away** targets.
+- **Hub-learned typed setpoints:** when the plugin learns heat/cool for a comfort, it auto-fills **Heat** / **Cool** on the matching **Climate program labels** row (``climate_typed_ext``); values survive typed-data merges and Node Server restart.
+- **Auto profile push:** saving **Climate program labels** rebuilds the IoX profile and calls ``updateProfile()`` (no manual **Load Profile**). Same on hub device list and cloud **DISCOVER**.
+
+### Changed
+
+- **Profile (IoX nodedef):** version **4.2.0** — HomeKit **Climate Type** command editor uses the full per-thermostat comfort subset. Restart the Node Server after upgrade; the plugin pushes profile updates automatically when comfort names change.
+- **Docs:** **README.md** HomeKit Climate Type guide (generic comfort names); [docs/HOMEKIT_GV3_SETPOINTS.md](docs/HOMEKIT_GV3_SETPOINTS.md) command-list section (4.1.8).
+
 ## [4.1.7] - 2026-06-23
 
 ### Fixed

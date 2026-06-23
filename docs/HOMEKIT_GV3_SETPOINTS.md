@@ -27,9 +27,26 @@ Comforts that share the HAP **Temp** slot (or collide with **Away** on the wire)
 |--------|----------------|
 | **Startup / hub reconnect** | Debounced hub snapshot per thermostat (same as node **Query**) after hub connect and device list processing |
 | **Vendor snapshot** | Target heat/cool for **Home**, **Sleep**, and **Away** (`VENDOR_ECOBEE_*_TARGET_*`) |
+| **Program (cloud DISCOVER)** | Heat/cool for every configured comfort from the Ecobee API (`customData.climate_setpoints`) — optional if you use cloud |
+| **Hub-learned (HomeKit-only)** | When the stat is on a custom comfort, **QUERY** records its heat/cool, persists to ``customData.climate_setpoints``, and auto-fills **Heat** / **Cool** on the matching typed row |
+| **Typed data (read-only fields)** | **Heat** / **Cool** on each comfort row under **Climate program labels** — filled by the plugin when setpoints are learned (not manual entry) |
 | **Learned signatures** | Heat/cool for **Vacation**, **Away Extended**, custom Smart slots when the stat has been on that comfort |
 
-Extra comforts that have **never** been active may still need one activation from the **Ecobee app** (or cloud backend) before IoX can command them over HomeKit — HomeKit does not expose vendor target characteristics for those comforts.
+### HomeKit-only (no cloud API)
+
+Ecobee HomeKit exposes vendor target setpoints only for **Home**, **Sleep**, and **Away**. Custom comforts (**Working**, **Vacation**, etc.) share HAP hold byte **Temp** and need explicit heat/cool before the hold command.
+
+Without cloud you can still command them:
+
+1. **Learn from the stat** — When the schedule or Ecobee app puts the stat on a custom comfort, run **QUERY** (or wait for the startup snapshot). The plugin caches heat/cool and writes them to typed data for later commands.
+2. **Rename comforts** — Edit **Display name** under **Climate program labels** (e.g. rename ``smart1`` to **Workshop**). Saving typed data rebuilds the IoX profile automatically.
+3. **Home / Away / Sleep** — Work from vendor targets on every **QUERY**; no cloud required.
+
+Extra comforts that have **never** been active and have no manual setpoints cannot be commanded until one of the above fills the cache — HomeKit does not publish program setpoints for those comforts.
+
+## Command list (4.1.8)
+
+HomeKit **Climate Type** commands use the **same per-thermostat comfort list** as cloud (custom names from **Climate program labels**). Saving typed data pushes an updated profile to IoX. The plugin still maps each choice to the correct HomeKit hold byte and writes program/cached setpoints when required.
 
 ## Startup refresh (4.1.7)
 

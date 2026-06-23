@@ -252,6 +252,15 @@ def test_resolve_gv3_comfort_setpoints_uses_vendor_cache():
     assert sp == (71.0, 76.0)
 
 
+def test_resolve_gv3_comfort_setpoints_uses_program_cache():
+    sp = resolve_gv3_comfort_setpoints(
+        climateMap['smart1'],
+        configured_refs=('home', 'away', 'sleep', 'smart1'),
+        program_comfort_sp={'smart1': (73.0, 78.0)},
+    )
+    assert sp == (73.0, 78.0)
+
+
 def test_resolve_gv3_comfort_setpoints_hk_slot_finds_learned_vacation():
     refs = ('home', 'away', 'sleep', 'vacation', 'smartAway')
     cache = {(50.0, 85.0): climateMap['vacation']}

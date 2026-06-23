@@ -31,7 +31,8 @@ TYPED_HK_SENSOR_OVERRIDES = 'hk_sensor_overrides'
 # PG3 only lists Custom Params that exist in saved config; seed missing keys on load (Kasa/HomeKit pattern).
 _DEFAULT_CUSTOM_PARAMS = {**DEFAULT_EFFECTIVE, 'api_key': ''}
 
-from climate_typed import TYPED_CLIMATE_PROGRAMS, climate_typed_params_section
+from climate_typed import TYPED_CLIMATE_PROGRAMS
+from climate_typed_ext import climate_typed_params_section_with_learned_setpoints
 
 
 class Controller(Node):
@@ -139,7 +140,7 @@ class Controller(Node):
                         {'name': 'notes', 'title': 'notes', 'isRequired': False},
                     ],
                 },
-                climate_typed_params_section(),
+                climate_typed_params_section_with_learned_setpoints(),
             ],
             True,
         )

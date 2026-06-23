@@ -23,6 +23,7 @@ from climate_typed import (
     sync_climate_typed_store,
 )
 from homekit_client.profile_writer import profile_needs_update, write_ecobee_climate_profile
+from ecobee_program import climate_setpoints_for_storage, climate_setpoints_from_program_climates
 from pgSession import pgSession
 from .Thermostat import Thermostat
 from node_funcs import *
@@ -701,11 +702,19 @@ class CloudBackend:
         self.profile_info = get_profile_info(LOGGER)
         api_by_tid: dict = {}
         typed_specs = []
+        program_sp_all: dict = dict(self.Data.get('climate_setpoints') or {})
         for thermostatId, thermostat in thermostats.items():
             fullData = self.getThermostatSelection(thermostatId,includeProgram=True)
             api_list = []
             if fullData is not False:
-                programs = fullData['thermostatList'][0]['program']
+                tstat = fullData['thermostatList'][0]
+                programs = tstat['program']
+                use_celsius = bool(tstat.get('settings', {}).get('useCelsius'))
+                sp_map = climate_setpoints_from_program_climates(
+                    programs['climates'],
+                    use_celsius=use_celsius,
+                )
+                program_sp_all[str(thermostatId)] = climate_setpoints_for_storage(sp_map)
                 for climate in programs['climates']:
                     api_list.append({'name': climate['name'], 'ref': climate['climateRef']})
             api_by_tid[thermostatId] = api_list
@@ -734,6 +743,7 @@ class CloudBackend:
         data_dump = customdata_user_snapshot(self.Data)
         update_profile = profile_needs_update(data_dump, self.profile_info['version'], climates)
         LOGGER.warning('check_profile: update_profile={}'.format(update_profile))
+        self.Data['climate_setpoints'] = program_sp_all
         if update_profile:
             write_ecobee_climate_profile(
                 Path('.'),

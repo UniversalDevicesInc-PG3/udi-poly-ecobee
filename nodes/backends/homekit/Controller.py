@@ -32,8 +32,8 @@ from climate_typed import (
     TYPED_CLIMATE_PROGRAMS,
     command_climates_for_thermostat,
     profile_climates_for_thermostat,
-    sync_climate_typed_store,
 )
+from climate_typed_ext import sync_climate_typed_store
 from node_funcs import (
     climateList,
     customdata_load_payload,
@@ -330,13 +330,60 @@ class HomeKitBackend:
         self.handler_data_st = True
 
     def handler_typed_params(self, _data):
-        # Climate labels live in TypedData; :meth:`handler_typed_data` loads them then calls
-        # ``_on_list_devices``, which rebuilds the profile. Avoid syncing here (stale TypedData).
         return
+
+    def _profile_climates_from_typed(self) -> Dict[str, List[Dict[str, str]]]:
+        """Build profile writer input from typed **Climate program labels** rows."""
+        rows_climate = self._typed_list(TYPED_CLIMATE_PROGRAMS)
+        climates: Dict[str, List[Dict[str, str]]] = {}
+        seen: set[str] = set()
+        for row in rows_climate:
+            if not isinstance(row, dict):
+                continue
+            tid = str(row.get('thermostat_id', '') or '').strip()
+            if not tid or tid in seen:
+                continue
+            did = str(row.get('device_id', '') or '').strip().lower()
+            climates[tid] = profile_climates_for_thermostat(
+                rows_climate,
+                tid,
+                device_id=did or None,
+                climate_catalog=climateList,
+            )
+            seen.add(tid)
+        for node in self._thermostat_by_device.values():
+            tid = str(getattr(node, 'thermostat_id', '') or '').strip()
+            if not tid or tid in seen:
+                continue
+            did = str(getattr(node, 'device_id_hub', '') or '').strip().lower()
+            climates[tid] = profile_climates_for_thermostat(
+                rows_climate,
+                tid,
+                device_id=did or None,
+                climate_catalog=climateList,
+            )
+            seen.add(tid)
+        stored = self.Data.get('climates')
+        if isinstance(stored, dict):
+            for tid in stored:
+                tid_s = str(tid).strip()
+                if tid_s and tid_s not in seen:
+                    climates[tid_s] = profile_climates_for_thermostat(
+                        rows_climate,
+                        tid_s,
+                        climate_catalog=climateList,
+                    )
+        return climates
 
     def handler_typed_data(self, data):
         if data is not None:
             self.TypedData.load(data)
+        try:
+            climates = self._profile_climates_from_typed()
+            if climates:
+                self._maybe_update_profile(climates)
+        except Exception:
+            LOGGER.exception('HomeKit typed data profile refresh failed')
         devs = self._ws.devices if self._ws else []
         if devs:
             self._on_list_devices(devs)
@@ -663,6 +710,68 @@ class HomeKitBackend:
             device_id=device_id,
         )
         return [str(c.get('ref', '') or '').strip() for c in climates if str(c.get('ref', '') or '').strip()]
+
+    def program_comfort_setpoints_for(self, thermostat_id: str) -> Dict[str, Tuple[float, float]]:
+        """
+        Heat/cool per ``climateRef`` for HomeKit comfort commands.
+
+        Merges (lowest → highest priority): hub-learned cache persisted in ``customData``,
+        then optional ``heat`` / ``cool`` on **Climate program labels** typed rows (auto-filled
+        when the plugin learns setpoints from the hub).
+        """
+        from ecobee_program import (
+            climate_setpoints_from_stored,
+            comfort_setpoints_from_typed_rows,
+            merge_comfort_setpoint_maps,
+        )
+
+        tid = str(thermostat_id)
+        return merge_comfort_setpoint_maps(
+            climate_setpoints_from_stored(self.Data, tid),
+            comfort_setpoints_from_typed_rows(self._typed_list(TYPED_CLIMATE_PROGRAMS), tid),
+        )
+
+    def persist_comfort_setpoint(
+        self,
+        thermostat_id: str,
+        climate_ref: str,
+        heat: float,
+        cool: float,
+        *,
+        device_id: Optional[str] = None,
+    ) -> None:
+        """Persist hub-learned comfort setpoints (HomeKit-only path; survives Node Server restart)."""
+        from climate_typed_ext import sync_learned_setpoint_in_typed_store
+        from ecobee_program import climate_setpoints_for_storage
+
+        ref = str(climate_ref or '').strip()
+        if not ref:
+            return
+        all_sp: Dict[str, Dict[str, Dict[str, float]]] = {}
+        raw = self.Data.get('climate_setpoints')
+        if isinstance(raw, dict):
+            all_sp = {str(k): dict(v) if isinstance(v, dict) else {} for k, v in raw.items()}
+        tid = str(thermostat_id)
+        block = dict(all_sp.get(tid) or {})
+        block[ref] = climate_setpoints_for_storage({ref: (float(heat), float(cool))})[ref]
+        all_sp[tid] = block
+        self.Data['climate_setpoints'] = all_sp
+        try:
+            sync_learned_setpoint_in_typed_store(
+                self.TypedData,
+                tid,
+                ref,
+                float(heat),
+                float(cool),
+                device_id=device_id,
+            )
+        except Exception:
+            LOGGER.debug(
+                'HomeKit: sync learned setpoint to typed data failed tid=%s ref=%s',
+                tid,
+                ref,
+                exc_info=True,
+            )
 
     def _existing_t_addresses(self) -> List[str]:
         out: List[str] = []
@@ -1621,6 +1730,14 @@ class HomeKitBackend:
             LOGGER.warning('refresh_thermostat snapshot failed for %s', did, exc_info=True)
             return
         self._apply_snapshot_values(node, values)
+        try:
+            node.seed_comfort_setpoints_from_query()
+        except Exception:
+            LOGGER.debug(
+                'seed comfort setpoints failed for %s',
+                getattr(node, 'address', '?'),
+                exc_info=True,
+            )
 
     def refresh_thermostat_gv3(self, node: HomeKitThermostat) -> None:
         """Re-read only Ecobee current comfort index (``GV3``) using hub ``get`` — no full snapshot."""

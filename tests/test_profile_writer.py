@@ -131,8 +131,8 @@ def test_write_ecobee_climate_profile_writes_custom_xml(mini_plugin: Path):
     ed = editor.read_text(encoding='utf-8')
     assert 'CTA_9243' in ed
     assert 'CT_HK_9243' in ed
-    assert 'subset="0-3"' in ed
-    assert 'subset="0-4"' in ed  # cloud command: through smart2
+    assert 'subset="0-4"' in ed  # HomeKit command: same configured subset as cloud
+    assert ed.count('subset="0-4"') == 2
     assert '_hk_hi' not in ed  # ``tstatcnt`` must not replace inside ``tstatcnt_hk_hi``
     assert 'I_HK_TSTAT_FAN_MODE' not in ed
     assert 'I_TSTAT_FAN_MODE' in text

@@ -18,14 +18,18 @@ def _make_node() -> HomeKitThermostat:
     hk.schedule_thermostat_refresh_after_hold_clear = MagicMock()
     node = HomeKitThermostat.__new__(HomeKitThermostat)
     node.hk = hk
+    hk.persist_comfort_setpoint = MagicMock()
+    hk.program_comfort_setpoints_for = MagicMock(return_value={})
     node.device_id_hub = 'dev-1'
     node.address = 't9243'
+    node.thermostat_id = '9243'
     node.set_driver_safe = MagicMock()
     node.getDriver = MagicMock(return_value='1')
     node._hub_write = MagicMock(return_value=True)
     node._hk_sp_sig_to_gv3 = {}
     node._hk_gv3_to_sp = {}
     node._hk_vendor_comfort_sp = {}
+    node._configured_climate_refs = MagicMock(return_value=['home', 'away', 'sleep'])
     return node
 
 
@@ -105,6 +109,7 @@ def test_cmd_set_gv3_vacation_writes_setpoints_then_hold():
     node._configured_climate_refs = MagicMock(
         return_value=['home', 'away', 'sleep', 'vacation', 'smartAway']
     )
+    node._program_comfort_sp = MagicMock(return_value={})
     node._hk_gv3_to_sp = {climateMap['vacation']: (50.0, 85.0)}
     node._hk_sp_sig_to_gv3 = {}
     node._hk_vendor_comfort_sp = {}
@@ -119,6 +124,26 @@ def test_cmd_set_gv3_vacation_writes_setpoints_then_hold():
     node.set_driver_safe.assert_any_call('CLISPC', 85.0)
 
 
+def test_cmd_set_gv3_working_uses_program_setpoints():
+    node = _make_node()
+    node.getDriver.return_value = '3'
+    node.use_celsius = False
+    node.thermostat_id = '421892113032'
+    node._configured_climate_refs = MagicMock(
+        return_value=['home', 'away', 'sleep', 'smart1']
+    )
+    node._program_comfort_sp = MagicMock(return_value={'smart1': (73.0, 78.0)})
+    node._hk_gv3_to_sp = {}
+    node._hk_sp_sig_to_gv3 = {}
+    node._hk_vendor_comfort_sp = {}
+    node._hub_write_hold_setpoints = MagicMock(return_value=True)
+
+    node.cmd_set_gv3({'value': climateMap['smart1']})
+
+    node._hub_write_hold_setpoints.assert_called_once_with(73.0, 78.0)
+    assert node._hub_write.call_args_list[0][0] == ('VENDOR_ECOBEE_SET_HOLD_SCHEDULE', 3)
+
+
 def test_cmd_set_gv3_temp_slot_aborts_without_known_setpoints():
     node = _make_node()
     node.getDriver.return_value = '3'
@@ -127,6 +152,7 @@ def test_cmd_set_gv3_temp_slot_aborts_without_known_setpoints():
     node._configured_climate_refs = MagicMock(
         return_value=['home', 'away', 'sleep', 'vacation', 'smartAway']
     )
+    node._program_comfort_sp = MagicMock(return_value={})
     node._hk_gv3_to_sp = {}
     node._hk_sp_sig_to_gv3 = {}
     node._hk_vendor_comfort_sp = {}

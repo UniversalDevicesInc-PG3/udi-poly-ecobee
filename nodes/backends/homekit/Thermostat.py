@@ -138,6 +138,15 @@ class HomeKitThermostat(Node):
             self._hk_gv3_to_sp = {}
         self._hk_sp_sig_to_gv3[hap_apply.comfort_setpoint_key(heat, cool)] = int(gv3)
         self._hk_gv3_to_sp[int(gv3)] = (float(heat), float(cool))
+        ref = hap_apply.gv3_to_comfort_ref(int(gv3), self._configured_climate_refs())
+        if ref and self.hk:
+            self.hk.persist_comfort_setpoint(
+                self.thermostat_id,
+                ref,
+                float(heat),
+                float(cool),
+                device_id=self.device_id_hub,
+            )
 
     def remember_hk_vendor_comfort_target(self, ref: str, band: str, hap_celsius: float) -> None:
         """Cache Ecobee vendor comfort target heat/cool from hub snapshot (home / sleep / away)."""
@@ -153,11 +162,32 @@ class HomeKitThermostat(Node):
             return
         self._hk_vendor_comfort_sp[r] = (float(heat), float(cool))
 
+    def _program_comfort_sp(self) -> dict[str, tuple[float, float]]:
+        if self.hk:
+            return self.hk.program_comfort_setpoints_for(self.thermostat_id)
+        return {}
+
+    def seed_comfort_setpoints_from_query(self) -> None:
+        """After hub snapshot, seed GV3→setpoint cache from program + vendor targets."""
+        from ecobee_program import seed_gv3_to_sp_from_comfort_maps
+        from node_funcs import climateMap
+
+        seed_gv3_to_sp_from_comfort_maps(
+            self._hk_gv3_to_sp,
+            program_sp=self._program_comfort_sp(),
+            vendor_sp=self._hk_vendor_comfort_sp,
+            climate_map=climateMap,
+        )
+        if getattr(self, '_hk_last_comfort_byte', None) == hap_apply.ECOBEE_HK_COMFORT_TEMP:
+            gv3 = self._resolve_hk_comfort_gv3()
+            self._remember_hk_comfort_signature(gv3)
+
     def _comfort_setpoints_for_gv3_command(self, gv3: int) -> tuple[float, float] | None:
         return hap_apply.resolve_gv3_comfort_setpoints(
             int(gv3),
             configured_refs=self._configured_climate_refs(),
             vendor_comfort_sp=self._hk_vendor_comfort_sp,
+            program_comfort_sp=self._program_comfort_sp(),
             gv3_to_sp=self._hk_gv3_to_sp,
             sp_sig_to_gv3=self._hk_sp_sig_to_gv3,
         )
@@ -357,7 +387,8 @@ class HomeKitThermostat(Node):
                 ref = hap_apply.gv3_to_comfort_ref(v, self._configured_climate_refs())
                 LOGGER.info(
                     'HomeKit %s: GV3=%s (%s) needs comfort setpoints but none are cached yet; '
-                    'run QUERY (or wait for the next hub reconnect snapshot) after the stat has used this comfort once, then retry.',
+                    'run QUERY while the stat is on this comfort, or activate it once on the Ecobee '
+                    'app so the plugin can learn heat/cool, then retry.',
                     self.address,
                     v,
                     ref or '?',

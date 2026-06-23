@@ -30,8 +30,33 @@ HomeKit nodes use a slimmer control set than cloud. The main schedule-related co
 
 | IoX control | Purpose |
 |-------------|---------|
-| **Climate Type** | Hold away / home / sleep / temp on the hub (four HAP slots). Extra comforts (Vacation, Away Extended, etc.) are commanded with matching **Heat Setpoint** / **Cool Setpoint** values when cached — see [CONFIG.md — HomeKit Climate Type](CONFIG.md#homekit-climate-type-commands-and-setpoints). |
+| **Climate Type** | Switch among configured comforts (Home, Away, Sleep, Smart1–Smart7, Vacation, etc.). Home / Sleep / Away use HAP hold bytes; others write cached setpoints then hold. |
 | **Schedule Mode** | **Running** = resume programmed schedule (clear hold on hub); **Hold Next** / **Hold Indefinite** = IoX record only |
+
+### HomeKit Climate Type (no cloud API)
+
+HomeKit does **not** expose Ecobee comfort **names** (only a comfort byte plus current heat/cool). The plugin maps comforts using **Climate program labels** typed data:
+
+1. Open the Ecobee Node Server → **Typed Data** → **Climate program labels**.
+2. Find your thermostat row (e.g. thermostat id `001` for node `t001`).
+3. Under nested **Comfort programs**, match each `climateRef` to your Ecobee app name:
+   - `home` → **Home**
+   - `away` → **Away**
+   - `sleep` → **Sleep**
+   - `smart1` → rename display name to your custom comfort (e.g. **Workshop**)
+   - `smart2` … `smart7` for additional custom comforts
+4. **Save** typed data — the plugin rebuilds the IoX profile and pushes it automatically; the **Climate Type** command list updates with your display names.
+
+**Heat** and **Cool** columns on each comfort row are filled **automatically** when the plugin learns setpoints from the hub (Node Server start, **QUERY**, or while the stat is on that comfort). You do not need to type them in.
+
+**How commands work**
+
+| Comfort kind | Behavior |
+|--------------|----------|
+| Home, Away, Sleep | Vendor hold byte only (setpoints come from the hub program). |
+| Custom (Smart1–Smart7, Vacation, …) | Plugin writes learned heat/cool to the hub, then places the hold. |
+
+If a custom comfort has no cached setpoints yet, run **QUERY** while the thermostat is **on that comfort** in the Ecobee app, or switch to it once on the stat so the plugin can learn heat/cool.
 
 On hub connect and Node Server start, each HomeKit thermostat automatically runs a debounced hub snapshot (same as **Query**) to cache comfort setpoints for **Climate Type** commands.
 
@@ -52,7 +77,7 @@ See [Polyglot NodeServer monitoring](https://forum.universal-devices.com/topic/2
 Store releases typically appear within about an hour of publish.
 
 1. Open the Polyglot web UI → Dashboard → **Restart** the Node Server
-2. If the release notes mention **Profile Change**, close and reopen the Admin Console (or **Load Profile**) if nodes look stale — recent HomeKit profile updates split **Climate Type** and **Schedule Mode** controls (profile **4.1.7**+).
+2. If the release notes mention **Profile Change**, close and reopen the Admin Console if nodes look stale — the Node Server pushes an updated profile on restart (profile **4.1.7**+ split **Climate Type** and **Schedule Mode**).
 
 ## Changelog
 

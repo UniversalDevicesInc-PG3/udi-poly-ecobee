@@ -188,13 +188,15 @@ def resolve_gv3_comfort_setpoints(
     *,
     configured_refs: Optional[Sequence[str]] = None,
     vendor_comfort_sp: Optional[Mapping[str, Tuple[float, float]]] = None,
+    program_comfort_sp: Optional[Mapping[str, Tuple[float, float]]] = None,
     gv3_to_sp: Optional[Mapping[int, Tuple[float, float]]] = None,
     sp_sig_to_gv3: Optional[Mapping[Tuple[float, float], int]] = None,
 ) -> Optional[Tuple[float, float]]:
     """
     Resolve IoX heat/cool setpoints for a ``GV3`` comfort command.
 
-    Priority: per-``GV3`` cache → inverted signature cache → vendor snapshot targets (home/away/sleep).
+    Priority: per-``GV3`` cache → inverted signature cache → vendor snapshot targets
+    (home/away/sleep) → stored Ecobee program setpoints (cloud discover).
     """
     g = int(gv3)
     if gv3_to_sp and g in gv3_to_sp:
@@ -217,6 +219,10 @@ def resolve_gv3_comfort_setpoints(
 
     if ref and vendor_comfort_sp and ref in vendor_comfort_sp:
         heat, cool = vendor_comfort_sp[ref]
+        return float(heat), float(cool)
+
+    if ref and program_comfort_sp and ref in program_comfort_sp:
+        heat, cool = program_comfort_sp[ref]
         return float(heat), float(cool)
 
     return None

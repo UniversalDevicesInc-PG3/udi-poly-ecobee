@@ -159,6 +159,63 @@ def test_hub_devices_topology_fingerprint_ignores_volatile_model_string():
     assert hk._hub_devices_topology_fingerprint(a) == hk._hub_devices_topology_fingerprint(b)
 
 
+def test_handler_typed_data_refreshes_profile_without_hub(tmp_path, monkeypatch):
+    from node_funcs import climateMap
+
+    class _TypedStore:
+        def __init__(self, data: dict):
+            self._data = data
+
+        def load(self, data):
+            self._data = data
+
+        def __contains__(self, key):
+            return key in self._data
+
+        def __getitem__(self, key):
+            return self._data[key]
+
+        def keys(self):
+            return self._data.keys()
+
+    hk = _hk()
+    profile_updates: list[bool] = []
+    hk.poly = SimpleNamespace(updateProfile=lambda: profile_updates.append(True))
+    hk._ws = None
+    hk.Data = {}
+    store = {
+        'climate_programs': [
+            {
+                'thermostat_id': '001',
+                'climates': [
+                    {'climateRef': 'smart1', 'name': 'Workshop'},
+                ],
+            }
+        ]
+    }
+    hk.TypedData = _TypedStore(store)
+    monkeypatch.setattr(
+        'nodes.backends.homekit.Controller.get_profile_info',
+        lambda _log: {'version': '9.9.9'},
+    )
+    monkeypatch.setattr(
+        'nodes.backends.homekit.Controller.customdata_user_snapshot',
+        lambda _data: {},
+    )
+    monkeypatch.setattr(hk, '_plugin_root', lambda: tmp_path)
+    (tmp_path / 'template').mkdir()
+    (tmp_path / 'template' / 'en_us.txt').write_text('BASE-NLS = 1\n', encoding='utf-8')
+    (tmp_path / 'template' / 'thermostat.xml').write_text('<nodedef id="EcobeeC_tstatid">\n', encoding='utf-8')
+    (tmp_path / 'template' / 'thermostat_homekit.xml').write_text('', encoding='utf-8')
+    (tmp_path / 'template' / 'editors.xml').write_text('<editor id="CT_tstatid" max="tstatcnt"/>\n', encoding='utf-8')
+
+    hk.handler_typed_data(store)
+
+    assert profile_updates == [True]
+    nls = (tmp_path / 'profile' / 'nls' / 'en_us.txt').read_text(encoding='utf-8')
+    assert f'CT_001-{climateMap["smart1"]} = Workshop' in nls
+
+
 def test_maybe_update_profile_writes_custom_nls(tmp_path, monkeypatch):
     hk = _hk()
     hk.poly = SimpleNamespace(updateProfile=lambda: None)

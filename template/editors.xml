@@ -5,7 +5,7 @@
     <!-- Per-thermostat subset: only comforts configured on the stat (``tstatcnt``). Status uses ``CTA_*`` / full ``tstatcnta``. -->
     <range uom="25" subset="0-tstatcnt" nls="CT_tstatid" />
   </editor>
-  <!-- HomeKit VENDOR_ECOBEE_SET_HOLD_SCHEDULE: IoX GV3 indices away/home/sleep/smart1 (0-3). -->
+  <!-- HomeKit Climate Type command: same per-thermostat subset as cloud CT_* (custom names). -->
   <editor id="CT_HK_tstatid">
     <range uom="25" subset="0-tstatcnt_hk_hi" nls="CT_tstatid" />
   </editor>
