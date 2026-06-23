@@ -157,3 +157,27 @@ def test_hub_devices_topology_fingerprint_ignores_volatile_model_string():
     a = [{'device_id': 'aa:bb', 'primary_aid': 1, 'accessories': [{'aid': 1}], 'model': 'ecobee4'}]
     b = [{'device_id': 'aa:bb', 'primary_aid': 1, 'accessories': [{'aid': 1}], 'model': 'ecobee5'}]
     assert hk._hub_devices_topology_fingerprint(a) == hk._hub_devices_topology_fingerprint(b)
+
+
+def test_maybe_update_profile_writes_custom_nls(tmp_path, monkeypatch):
+    hk = _hk()
+    hk.poly = SimpleNamespace(updateProfile=lambda: None)
+    monkeypatch.setattr(
+        'nodes.backends.homekit.Controller.get_profile_info',
+        lambda _log: {'version': '9.9.9'},
+    )
+    monkeypatch.setattr(
+        'nodes.backends.homekit.Controller.customdata_user_snapshot',
+        lambda _data: {},
+    )
+    monkeypatch.setattr(hk, '_plugin_root', lambda: tmp_path)
+    (tmp_path / 'template').mkdir()
+    (tmp_path / 'template' / 'en_us.txt').write_text('BASE-NLS = 1\n', encoding='utf-8')
+    (tmp_path / 'template' / 'thermostat.xml').write_text('<nodedef id="EcobeeC_tstatid">\n', encoding='utf-8')
+    (tmp_path / 'template' / 'thermostat_homekit.xml').write_text('', encoding='utf-8')
+    (tmp_path / 'template' / 'editors.xml').write_text('<editor id="CT_tstatid" max="tstatcnt"/>\n', encoding='utf-8')
+    climates = {'123': [{'ref': 'home', 'name': 'Home'}]}
+    hk._maybe_update_profile(climates)
+    nls = tmp_path / 'profile' / 'nls' / 'en_us.txt'
+    assert nls.is_file()
+    assert 'CT_123-1 = Home' in nls.read_text(encoding='utf-8')

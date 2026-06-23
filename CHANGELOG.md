@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.5] - 2026-06-23
+
+### Fixed
+
+- **HomeKit profile / NLS:** restore missing `profile_writer` imports in the HomeKit backend so hub device discovery writes `profile/nls/en_us.txt`, per-thermostat `custom.xml` nodedef/editor snippets, and calls **Load Profile** instead of failing with `NameError: profile_needs_update`.
+
 ## [4.1.4] - 2026-06-23
 
 ### Added

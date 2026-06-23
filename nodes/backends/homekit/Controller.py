@@ -27,6 +27,7 @@ from homekit_client.char_map import (
     thermostat_control_aid_from_snapshot_values,
 )
 from homekit_client.mapping import remote_sensor_address, resolve_thermostat_address
+from homekit_client.profile_writer import profile_needs_update, write_ecobee_climate_profile
 from climate_typed import (
     TYPED_CLIMATE_PROGRAMS,
     profile_climates_for_thermostat,
