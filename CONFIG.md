@@ -23,8 +23,8 @@
    - **`hk_transport`** = `mqtt` (preferred default)
 5. Confirm these match your HomeKit hub (see [Defaults checklist](#defaults-checklist) below). On a typical Polisy/eISY install, **do not change them** — just **Save**.
 6. On the **Ecobee Controller** node, within about a minute:
-   - **GV1** (Ecobee Connection Status) = **true** when hello to the hub succeeded
-   - **GV5** (HomeKit MQTT) = **2** (Connected) when using MQTT
+   - **Ecobee Connection Status** = **true** when hello to the hub succeeded
+   - **HomeKit MQTT** = **Connected** when using MQTT
 7. Thermostat nodes (`t…`) and remote sensor nodes (`rs…`) should appear. If not, see [Verify success](#verify-success) and [Troubleshooting](#troubleshooting).
 
 **`backend` seeding:** If **`backend`** is missing, the plugin sets it once: **`homekit`** for a brand-new NS; **`cloud`** only when OAuth, **`api_key`**, saved Ecobee tokens/PIN, or existing thermostat nodes indicate a legacy install. A value already stored in PG3 is never overwritten.
@@ -52,12 +52,12 @@ Saving Custom Params after changing **`hk_transport`** or any **`hk_ws_*` / `hk_
 
 On the **Ecobee Controller** node (HomeKit mode):
 
-| Driver | Good value | Meaning |
-|--------|------------|---------|
-| **GV1** (Ecobee Connection Status) | `true` | Active transport completed hello to the hub. |
-| **GV5** (HomeKit MQTT) | `2` | MQTT connected (when **`hk_transport`** is `mqtt`). |
-| **GV4** (HomeKit WebSocket) | `2` | WebSocket connected (only when **`hk_transport`** is `websocket`). |
-| **GV3** (Authorized) | reflects hub | Hub reported paired devices. |
+| IoX status | Good value | Meaning |
+|------------|------------|---------|
+| **Ecobee Connection Status** | `true` | Active transport completed hello to the hub. |
+| **HomeKit MQTT** | `Connected` | MQTT connected (when **`hk_transport`** is `mqtt`). |
+| **HomeKit WebSocket** | `Connected` | WebSocket connected (only when **`hk_transport`** is `websocket`). |
+| **Authorized** | reflects hub | Hub reported paired devices. |
 
 **Healthy signs:** thermostat nodes (`t…`) and sensors (`rs…`) in IoX; no persistent **Notices** named **`homekit_hub_unreachable`**, **`homekit_no_thermostat`**, or **`homekit_hub_warnings`**.
 
@@ -132,13 +132,13 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | ------- | ------- |
 | **HomeKit thermostat address overrides** | Map hub `device_id` to thermostat id for IoX address `t<id>`. |
 | **HomeKit remote sensor address overrides** | Optional hints for `rs_*` sensor addresses. |
-| **Climate program labels** | Per-thermostat comfort display names for IoX **GV3** (Climate Type) labels and editors. See [Climate program labels](#climate-program-labels). |
+| **Climate program labels** | Per-thermostat comfort display names for IoX **Climate Type** labels and editors. See [Climate program labels](#climate-program-labels). |
 
 ---
 
 ## Climate program labels
 
-**Custom Typed Data → Climate program labels** stores friendly comfort names **per thermostat**. The plugin uses these names in IoX nodedef labels (**CTA_***, **CT_***, **CT_HK_***) and in per-thermostat **GV3** (Climate Type) command lists.
+**Custom Typed Data → Climate program labels** stores friendly comfort names **per thermostat**. The plugin uses these names in IoX nodedef labels (**CTA_***, **CT_***, **CT_HK_***) and in per-thermostat **Climate Type** command lists.
 
 ### Structure
 
@@ -181,19 +181,34 @@ You usually do **not** need to create rows manually:
 - **Cloud:** rows are created or updated on **DISCOVER**. Names are filled from `program.climates` in the Ecobee API when still empty or at plugin defaults. **User-edited names are preserved** on later syncs.
 - **HomeKit:** rows are created when the hub device list is processed. Names start from the default catalog until you edit them here.
 
-After you change labels in Custom Typed Data, the plugin refreshes the IoX profile so **GV3** (Climate Type) pick lists pick up the new text (cloud immediately on save; HomeKit on the next hub device list / profile write).
+After you change labels in Custom Typed Data, the plugin refreshes the IoX profile so **Climate Type** pick lists pick up the new text (cloud immediately on save; HomeKit on the next hub device list / profile write).
 
-### Effect on **GV3** (Climate Type) (cloud vs HomeKit)
+### Effect on **Climate Type** (cloud vs HomeKit)
 
 **Cloud backend**
 
-- **GV3** (Climate Type) **status** uses the full comfort catalog with your custom names where configured.
-- **GV3** (Climate Type) **commands** list only comforts **configured on that thermostat** (from the Ecobee API), not the entire fixed catalog. Custom names appear in the command editor (**CT_***).
+- **Climate Type** **status** uses the full comfort catalog with your custom names where configured.
+- **Climate Type** **commands** list only comforts **configured on that thermostat** (from the Ecobee API), not the entire fixed catalog. Custom names appear in the command editor (**CT_***).
 
 **HomeKit backend**
 
-- **GV3** (Climate Type) **status** uses the full **CTA_*** label range so current comfort and all configured names can display correctly.
-- **GV3** (Climate Type) **commands** remain limited to **CT_HK_*** indices **0–3** (Away / Home / Sleep / Temp). Ecobee's HomeKit vendor hold (`VENDOR_ECOBEE_SET_HOLD_SCHEDULE`) accepts only **four** program bytes. Additional comforts from your Ecobee app program can **display** in status but cannot be selected as separate HomeKit holds — use the **Ecobee app** or **cloud** backend to command them.
+- **Climate Type** **status** uses the full comfort label range (**CTA_***) so current comfort and all configured names can display correctly. When Ecobee reports HAP byte **3** (Temp) for comforts beyond Home / Sleep / Away (e.g. **Vacation** and **Away Extended**), status resolves **Climate Type** from **Heat Setpoint** / **Cool Setpoint** signatures against the thermostat’s configured comfort list (not always **Smart1**).
+- **Climate Type** **commands** use the four HomeKit hold slots (**CT_HK_***) indices **0–3** (Away / Home / Sleep / Temp). For comforts that need explicit setpoints (Temp slot, Vacation, Away Extended, etc.), the plugin writes heat/cool thresholds before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
+
+### HomeKit Climate Type — commands and setpoints
+
+Ecobee HomeKit exposes only **four** hold bytes on the wire (Home, Sleep, Away, Temp). IoX can still **command** extra comforts when their setpoints are known:
+
+| Source | What is cached |
+|--------|----------------|
+| **Startup / hub reconnect** | Automatic debounced snapshot per thermostat (same as **Query**) after the hub connects |
+| **Vendor snapshot** | Target heat/cool for **Home**, **Sleep**, and **Away** (`VENDOR_ECOBEE_*_TARGET_*`) |
+| **Learned signatures** | Heat/cool pairs for **Vacation**, **Away Extended**, custom Smart slots, etc., when the stat has been on that comfort (status or Ecobee app) |
+| **HK command index 3** | Maps to the first configured extra comfort on that stat (e.g. **Vacation** when **Smart1** is not in the program) |
+
+**Home / Away / Sleep** commands use the hold byte only (Ecobee applies program setpoints). **Vacation**, **Away Extended**, and other Temp-slot comforts require cached setpoints; the command is rejected (IoX unchanged) until a snapshot or prior use has populated the cache.
+
+Extra comforts that have never been active on the stat may still need one activation from the **Ecobee app** (or cloud backend) before IoX can command them over HomeKit.
 
 ---
 
@@ -203,7 +218,7 @@ After you change labels in Custom Typed Data, the plugin refreshes the IoX profi
 
 - **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit**.
 - Thermostats appear as **`t…`** nodes; remote sensors as **`rs…`**. **No weather / forecast nodes** on HomeKit.
-- **Realtime updates** from hub events; **QUERY** triggers a snapshot read.
+- **Realtime updates** from hub events; **Query** triggers a snapshot read. On hub connect / Node Server start, each thermostat also gets an automatic debounced snapshot to cache comfort setpoints for **Climate Type** commands.
 - Hub metadata characteristics are informational only (not copied to IoX drivers). Unknown HAP chars may log **`homekit_unknown_chars`** notices.
 - Temperature display follows **`use_celsius`** in Custom Params, not HAP Temperature Display Units.
 
@@ -211,21 +226,21 @@ After you change labels in Custom Typed Data, the plugin refreshes the IoX profi
 
 HomeKit thermostats use **`EcobeeHKC_*`** / **`EcobeeHKF_*`** (Celsius / Fahrenheit) — slimmer than cloud nodedefs.
 
-**Supported via hub:** **ST** (Temperature), **CLISPH** (Heat Setpoint), **CLISPC** (Cool Setpoint), **CLIMD** (Mode), **CLIFS** (Fan Mode), **CLIHUM** (Humidity), **CLIHCS** (HVAC State), **CLIFRS** (Fan State), **GV1** (Humidification Setpoint), **CLISMD** (Schedule Mode), **GV3** (Climate Type), **BRT** (Setpoint Up) / **DIM** (Setpoint Down), **QUERY**.
+**Supported via hub:** **Temperature**, **Heat Setpoint**, **Cool Setpoint**, **Mode**, **Fan Mode**, **Humidity**, **HVAC State**, **Fan State**, **Humidification Setpoint**, **Schedule Mode**, **Climate Type**, **Setpoint Up** / **Setpoint Down**, **Query**.
 
-**GV3** (Climate Type) **(HomeKit):** **Status** uses the full **CTA_*** range with per-thermostat custom names from [Climate program labels](#climate-program-labels). **Commands** are still limited to four HomeKit hold slots (**CT_HK_***): indices **away (0), home (1), sleep (2), smart1 (3)** — Ecobee's vendor hold accepts only four program bytes. Extra comforts from your Ecobee program can appear in status but are not separate HomeKit hold commands; use the **Ecobee app** or **cloud** backend.
+**Climate Type** **(HomeKit):** **Status** uses the full comfort label range with per-thermostat custom names. When the hub reports HAP byte **3** (Temp), status disambiguates **Vacation**, **Away Extended**, and other extra comforts using setpoint signatures (not always catalog **Smart1**). **Commands** use **CT_HK_*** indices **away (0), home (1), sleep (2), smart1 (3)**; index **3** maps to the first configured extra comfort when **smart1** is not on the stat. For Temp-slot and collision comforts, the plugin writes heat/cool setpoints before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
 
-**CLISMD** (Schedule Mode) **(HomeKit):** **Running** (0) sends the Ecobee vendor **clear hold** sequence on the hub and refreshes the thermostat snapshot. **Hold Next** (1) and **Hold Indefinite** (2) update the IoX driver only — HomeKit does not expose hold duration the way the cloud API does. Setpoints and **GV3** (Climate Type) writes imply a hold (**CLISMD** (Schedule Mode) becomes **1**); use **CLISMD** (Schedule Mode)=0 to resume the programmed schedule.
+**Schedule Mode** **(HomeKit):** **Running** sends the Ecobee vendor **clear hold** sequence on the hub and refreshes the thermostat snapshot. **Hold Next** (1) and **Hold Indefinite** (2) update the IoX driver only — HomeKit does not expose hold duration the way the cloud API does. **Heat Setpoint** / **Cool Setpoint** and **Climate Type** writes imply a hold (**Schedule Mode** becomes **Hold Next**); use **Schedule Mode** = **Running** to resume the programmed schedule.
 
-**Removed vs cloud (not on HomeKit node):** **GV4** (Fan On Time)–**GV11** (Backlight Sleep Intensity), **GV17** (ECO+), etc. Use the Ecobee app or cloud if you need those.
+**Removed vs cloud (not on HomeKit node):** **Fan On Time**, **Backlight On Intensity**, **Backlight Sleep Intensity**, **ECO+**, etc. Use the Ecobee app or cloud if you need those.
 
-**Hold duration:** HomeKit cannot set hold-next vs indefinite independently. After a hold is placed via setpoints or **GV3** (Climate Type), **CLISMD** (Schedule Mode) reports **1** (hold active). Use the Ecobee app or cloud backend if you need the exact hold type.
+**Hold duration:** HomeKit cannot set hold-next vs indefinite independently. After a hold is placed via setpoints or **Climate Type**, **Schedule Mode** reports **Hold Next** (hold active). Use the Ecobee app or cloud backend if you need the exact hold type.
 
-**CLIFS** (Fan Mode) uses the same IoX values as cloud (**auto = 0**, **on = 1**); HAP TargetFanState is translated at the hub boundary.
+**Fan Mode** uses the same IoX values as cloud (**auto = 0**, **on = 1**); HAP TargetFanState is translated at the hub boundary.
 
 ### Limitations (HomeKit path)
 
-The Ecobee app's full program list (vacation, custom comforts beyond the fourth slot, Smart Home/Away, etc.) is not exposed as distinct HomeKit **hold commands** — only **Home, Sleep, Away,** and **Temp** (smart1). Custom names for additional comforts can still appear in **GV3** (Climate Type) **status**. Schedules, hold duration, and some comfort features may not map 1:1 to HomeKit.
+The Ecobee app's full program list is not exposed as distinct HomeKit **hold bytes** — only **Home, Sleep, Away,** and **Temp** on the wire. Custom names for additional comforts appear in **Climate Type** status; commanding them from IoX uses cached setpoints when available (see [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints)). Schedules, hold duration, and some comfort features may not map 1:1 to HomeKit.
 
 After profile upgrades, restart the Node Server and let the profile refresh so nodedefs update.
 
@@ -241,8 +256,8 @@ Use only if you have a **working personal Ecobee developer API key** (not UDI / 
 4. Wait for approval (checked every 60 seconds; do not restart during this step).
 5. Thermostats, sensors, weather, and forecast nodes are added via the Ecobee API (refreshes about every 3 minutes).
 
-**GV3** (Climate Type) **(cloud):** **Status** and **commands** use per-thermostat comfort lists from the Ecobee API. The command editor (**CT_***) shows only comforts configured on that stat, with labels from [Climate program labels](#climate-program-labels) when set. See [Effect on GV3](#effect-on-gv3-climate-type-cloud-vs-homekit) for details.
+**Climate Type** **(cloud):** **Status** and **commands** use per-thermostat comfort lists from the Ecobee API. The command editor (**CT_***) shows only comforts configured on that stat, with labels from [Climate program labels](#climate-program-labels) when set. See [Effect on Climate Type](#effect-on-climate-type-cloud-vs-homekit) for details.
 
-**Schedule mode:** **CLISMD** (Schedule Mode) — **Running** / **Hold Next** / **Hold Indefinite** on all backends. On **HomeKit**, only **Running** (0) is sent to the hub (vendor clear hold); **1** and **2** are IoX-only. See [HomeKit behavior vs cloud](#reference-homekit-behavior-vs-cloud) for **GV3** (Climate Type) hold limits.
+**Schedule mode:** **Schedule Mode** — **Running** / **Hold Next** / **Hold Indefinite** on all backends. On **HomeKit**, only **Running** is sent to the hub (vendor clear hold); **Hold Next** and **Hold Indefinite** are IoX-only. See [HomeKit behavior vs cloud](#reference-homekit-behavior-vs-cloud) for **Climate Type** hold limits.
 
 With Polyglot OAuth, **`api_key`** overrides injected defaults and must use a redirect URI matching `https://polyglot.isy.io/api/oauth/callback`. Do not rely on historical UDI-provided keys for new setups.

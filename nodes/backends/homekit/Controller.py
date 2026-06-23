@@ -132,6 +132,8 @@ class HomeKitBackend:
         self._hk_last_transport_snap: Optional[Dict[str, str]] = None
         self._hk_last_disconnect_notice_monotonic: float = 0.0
         self._unknown_char_notice_lines: List[str] = []
+        self._startup_refresh_timer: Optional[threading.Timer] = None
+        self._startup_refresh_timer_lock = threading.Lock()
 
     def _set_notice_html(self, key: str, body_html: str) -> None:
         self.Notices[key] = notice_html_with_timestamp(body_html)
@@ -524,6 +526,45 @@ class HomeKitBackend:
                 LOGGER.debug('delete %s failed', nk, exc_info=True)
         # Pairing list is applied from hello ``ack`` ``devices[]`` in ``HubWebSocketClient`` (no bootstrap
         # ``list_devices`` on the hub). Proactive hub ``list_devices`` after pair/unpair still arrives here.
+        self._schedule_thermostat_startup_refresh()
+
+    def _schedule_thermostat_startup_refresh(self, delay: float = 1.0) -> None:
+        """
+        Debounced hub snapshot per thermostat (same as node **QUERY**) to cache comfort setpoints.
+
+        Caches vendor Home / Sleep / Away target heat/cool from the snapshot and learns signatures
+        for extra comforts (Vacation, Away Extended, etc.) when the stat is on them at refresh time.
+        """
+
+        def _fire() -> None:
+            with self._startup_refresh_timer_lock:
+                self._startup_refresh_timer = None
+            if not self.ready or self._ws is None:
+                return
+            for node in list(self._thermostat_by_device.values()):
+                if not isinstance(node, HomeKitThermostat):
+                    continue
+                try:
+                    self.refresh_thermostat(node)
+                    node.reportDrivers()
+                except Exception:
+                    LOGGER.debug(
+                        'HomeKit startup refresh failed for %s',
+                        getattr(node, 'address', '?'),
+                        exc_info=True,
+                    )
+
+        with self._startup_refresh_timer_lock:
+            old = self._startup_refresh_timer
+            if old is not None:
+                try:
+                    old.cancel()
+                except Exception:
+                    pass
+            timer = threading.Timer(delay, _fire)
+            timer.daemon = True
+            self._startup_refresh_timer = timer
+            timer.start()
 
     def _on_ws_transport_error(
         self,
@@ -1070,6 +1111,7 @@ class HomeKitBackend:
                             )
             except Exception:
                 LOGGER.exception('HomeKit add thermostat %s failed', addr)
+        self._schedule_thermostat_startup_refresh()
 
     def _sensor_nodedef_homekit(self, use_celsius: bool) -> str:
         return 'EcobeeSensorHC' if use_celsius else 'EcobeeSensorHF'
@@ -1635,6 +1677,13 @@ class HomeKitBackend:
 
     def handler_stop(self):
         LOGGER.debug('HomeKit backend stop')
+        with self._startup_refresh_timer_lock:
+            if self._startup_refresh_timer is not None:
+                try:
+                    self._startup_refresh_timer.cancel()
+                except Exception:
+                    pass
+                self._startup_refresh_timer = None
         self.close()
         self._thermostat_by_device.clear()
         self._thermostat_primary_aid.clear()

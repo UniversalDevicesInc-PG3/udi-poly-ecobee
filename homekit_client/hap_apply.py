@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
-from node_funcs import climateMap, toF
+from node_funcs import climateMap, getMapName, toF
 
 from .char_map import CharBucket, classify, normalize_characteristic_label, normalize_hap_uuid
 
@@ -116,6 +116,110 @@ def resolve_hk_comfort_gv3(
         return gv, cache
 
     return fallback, cache
+
+
+# aiohomekit ``VENDOR_ECOBEE_*_TARGET_HEAT/COOL`` → ``climateRef`` (HomeKit snapshot only exposes these three).
+_VENDOR_COMFORT_TARGET_PREFIXES: Tuple[Tuple[str, str], ...] = (
+    ('VENDOR_ECOBEE_HOME_TARGET_HEAT', 'home'),
+    ('VENDOR_ECOBEE_HOME_TARGET_COOL', 'home'),
+    ('VENDOR_ECOBEE_SLEEP_TARGET_HEAT', 'sleep'),
+    ('VENDOR_ECOBEE_SLEEP_TARGET_COOL', 'sleep'),
+    ('VENDOR_ECOBEE_AWAY_TARGET_HEAT', 'away'),
+    ('VENDOR_ECOBEE_AWAY_TARGET_COOL', 'away'),
+)
+
+# Comfort refs whose IoX ``GV3`` maps to HAP Away (2) but need explicit setpoints (not plain Away).
+_GV3_AWAY_COLLISION_REFS = frozenset({'vacation', 'smartAway', 'demandResponse'})
+
+
+def parse_ecobee_vendor_comfort_target(characteristic: str) -> Optional[Tuple[str, str]]:
+    """
+    Parse Ecobee vendor comfort target characteristic → ``(climateRef, 'heat'|'cool')``.
+
+    Returns ``None`` when *characteristic* is not a known ``VENDOR_ECOBEE_*_TARGET_*`` name.
+    """
+    u = (characteristic or '').upper().replace('-', '_')
+    if 'VENDOR_ECOBEE' not in u or 'TARGET' not in u:
+        return None
+    for prefix, ref in _VENDOR_COMFORT_TARGET_PREFIXES:
+        if u == prefix or u.endswith(prefix):
+            band = 'heat' if prefix.endswith('_HEAT') else 'cool'
+            return ref, band
+    return None
+
+
+def gv3_to_comfort_ref(gv3: int, configured_refs: Optional[Sequence[str]] = None) -> Optional[str]:
+    """
+    Map IoX ``GV3`` index → Ecobee ``climateRef`` for setpoint lookup.
+
+    When the HK command editor sends catalog index **smart1** (3) but the thermostat has no
+    ``smart1`` comfort, use the first configured extra comfort (same order as status disambiguation).
+    """
+    ref = getMapName(climateMap, int(gv3))
+    if not ref:
+        return None
+    configured = [str(r or '').strip() for r in (configured_refs or ()) if str(r or '').strip()]
+    if ref in configured:
+        return ref
+    if int(gv3) == int(climateMap['smart1']):
+        extras = hk_temp_mode_extra_refs(configured)
+        if extras:
+            return extras[0]
+    return ref
+
+
+def gv3_command_needs_setpoints(gv3: int) -> bool:
+    """True when ``SET_HOLD_SCHEDULE`` alone is not enough — comfort setpoints must be written too."""
+    g = int(gv3)
+    if gv3_to_ecobee_set_hold_schedule(g) == ECOBEE_HK_COMFORT_TEMP:
+        return True
+    ref = getMapName(climateMap, g)
+    if ref in _GV3_AWAY_COLLISION_REFS:
+        return True
+    if ref and ref.startswith('smart') and ref not in _HAP_DIRECT_COMFORT_REFS:
+        return True
+    if ref == 'unknown':
+        return True
+    return False
+
+
+def resolve_gv3_comfort_setpoints(
+    gv3: int,
+    *,
+    configured_refs: Optional[Sequence[str]] = None,
+    vendor_comfort_sp: Optional[Mapping[str, Tuple[float, float]]] = None,
+    gv3_to_sp: Optional[Mapping[int, Tuple[float, float]]] = None,
+    sp_sig_to_gv3: Optional[Mapping[Tuple[float, float], int]] = None,
+) -> Optional[Tuple[float, float]]:
+    """
+    Resolve IoX heat/cool setpoints for a ``GV3`` comfort command.
+
+    Priority: per-``GV3`` cache → inverted signature cache → vendor snapshot targets (home/away/sleep).
+    """
+    g = int(gv3)
+    if gv3_to_sp and g in gv3_to_sp:
+        heat, cool = gv3_to_sp[g]
+        return float(heat), float(cool)
+
+    ref = gv3_to_comfort_ref(g, configured_refs)
+    alt_gv = int(climateMap[ref]) if ref and ref in climateMap else None
+    if alt_gv is not None and alt_gv != g and gv3_to_sp and alt_gv in gv3_to_sp:
+        heat, cool = gv3_to_sp[alt_gv]
+        return float(heat), float(cool)
+
+    for sig, cached_gv in (sp_sig_to_gv3 or {}).items():
+        if int(cached_gv) == g:
+            return float(sig[0]), float(sig[1])
+    if alt_gv is not None:
+        for sig, cached_gv in (sp_sig_to_gv3 or {}).items():
+            if int(cached_gv) == alt_gv:
+                return float(sig[0]), float(sig[1])
+
+    if ref and vendor_comfort_sp and ref in vendor_comfort_sp:
+        heat, cool = vendor_comfort_sp[ref]
+        return float(heat), float(cool)
+
+    return None
 
 
 def gv3_to_ecobee_set_hold_schedule(gv3: int) -> int:
@@ -267,6 +371,18 @@ def apply_characteristic_to_thermostat(
             gv3 = ecobee_hk_comfort_to_gv3(int(raw))
         node.set_driver_safe('GV3', gv3)
         return True
+
+    if value is not None:
+        vendor_target = parse_ecobee_vendor_comfort_target(characteristic)
+        if vendor_target is not None:
+            ref, band = vendor_target
+            remember = getattr(node, 'remember_hk_vendor_comfort_target', None)
+            if _is_homekit_thermostat(node) and callable(remember):
+                try:
+                    remember(ref, band, float(value))
+                except (TypeError, ValueError):
+                    pass
+            return True
 
     bucket = classify(characteristic, 0)
     if bucket == CharBucket.UNKNOWN:

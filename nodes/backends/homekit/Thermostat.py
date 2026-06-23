@@ -44,6 +44,9 @@ class HomeKitThermostat(Node):
         self._hap_cur_hc_four_value = False
         self._hk_last_comfort_byte: int | None = None
         self._hk_sp_sig_to_gv3: dict[tuple[float, float], int] = {}
+        self._hk_gv3_to_sp: dict[int, tuple[float, float]] = {}
+        self._hk_vendor_comfort_sp: dict[str, tuple[float, float]] = {}
+        self._hk_vendor_partial: dict[tuple[str, str], float] = {}
         base = 'EcobeeHKC' if use_celsius else 'EcobeeHKF'
         self.drivers = deepcopy(driversMap[base])
         self.id = f'{base}_{thermostat_id}'
@@ -90,7 +93,10 @@ class HomeKitThermostat(Node):
     def hk_comfort_gv3_resolver(self, hub_byte: int) -> int:
         """Resolve IoX ``GV3`` from Ecobee HAP comfort byte (uses setpoints for Temp / byte 3)."""
         self._hk_last_comfort_byte = int(hub_byte)
-        return self._resolve_hk_comfort_gv3()
+        gv3 = self._resolve_hk_comfort_gv3()
+        if int(hub_byte) == hap_apply.ECOBEE_HK_COMFORT_TEMP:
+            self._remember_hk_comfort_signature(gv3)
+        return gv3
 
     def refresh_gv3_after_hk_setpoint(self) -> None:
         if getattr(self, '_hk_last_comfort_byte', None) != hap_apply.ECOBEE_HK_COMFORT_TEMP:
@@ -128,7 +134,51 @@ class HomeKitThermostat(Node):
             return
         if not hasattr(self, '_hk_sp_sig_to_gv3'):
             self._hk_sp_sig_to_gv3 = {}
+        if not hasattr(self, '_hk_gv3_to_sp'):
+            self._hk_gv3_to_sp = {}
         self._hk_sp_sig_to_gv3[hap_apply.comfort_setpoint_key(heat, cool)] = int(gv3)
+        self._hk_gv3_to_sp[int(gv3)] = (float(heat), float(cool))
+
+    def remember_hk_vendor_comfort_target(self, ref: str, band: str, hap_celsius: float) -> None:
+        """Cache Ecobee vendor comfort target heat/cool from hub snapshot (home / sleep / away)."""
+        r = str(ref or '').strip()
+        b = str(band or '').strip().lower()
+        if not r or b not in ('heat', 'cool'):
+            return
+        sp = hap_apply.driver_st_from_hap_celsius(self.use_celsius, float(hap_celsius))
+        self._hk_vendor_partial[(r, b)] = float(sp)
+        heat = self._hk_vendor_partial.get((r, 'heat'))
+        cool = self._hk_vendor_partial.get((r, 'cool'))
+        if heat is None or cool is None:
+            return
+        self._hk_vendor_comfort_sp[r] = (float(heat), float(cool))
+
+    def _comfort_setpoints_for_gv3_command(self, gv3: int) -> tuple[float, float] | None:
+        return hap_apply.resolve_gv3_comfort_setpoints(
+            int(gv3),
+            configured_refs=self._configured_climate_refs(),
+            vendor_comfort_sp=self._hk_vendor_comfort_sp,
+            gv3_to_sp=self._hk_gv3_to_sp,
+            sp_sig_to_gv3=self._hk_sp_sig_to_gv3,
+        )
+
+    def _hub_write_hold_setpoints(self, heat: float, cool: float) -> bool:
+        """Write heat/cool thresholds for a comfort hold (auto and fixed-band modes)."""
+        span = self._heat_cool_min_span()
+        if cool < heat + span:
+            cool = heat + span
+        hv = hap_apply.iox_temp_to_hap_celsius(self, heat, fahrenheit_wire_bias='low')
+        cv = hap_apply.iox_temp_to_hap_celsius(self, cool, fahrenheit_wire_bias='low')
+        if self._hub_write(
+            hap_apply.hap_name_heating_threshold(), hv
+        ) and self._hub_write(hap_apply.hap_name_cooling_threshold(), cv):
+            return True
+        m = self._climd_write_mode()
+        if m in (1, 4):
+            return self._hub_write(hap_apply.hap_name_target_temperature(), hv)
+        if m == 2:
+            return self._hub_write(hap_apply.hap_name_target_temperature(), cv)
+        return False
 
     def set_clismd(self, val: int) -> None:
         self.set_driver_safe('CLISMD', int(val))
@@ -300,8 +350,27 @@ class HomeKitThermostat(Node):
             return
         c = hap_apply.hap_name_vendor_ecobee_set_hold_schedule()
         hub_byte = hap_apply.gv3_to_ecobee_set_hold_schedule(v)
+        comfort_sp = None
+        if hap_apply.gv3_command_needs_setpoints(v):
+            comfort_sp = self._comfort_setpoints_for_gv3_command(v)
+            if comfort_sp is None:
+                ref = hap_apply.gv3_to_comfort_ref(v, self._configured_climate_refs())
+                LOGGER.info(
+                    'HomeKit %s: GV3=%s (%s) needs comfort setpoints but none are cached yet; '
+                    'run QUERY (or wait for the next hub reconnect snapshot) after the stat has used this comfort once, then retry.',
+                    self.address,
+                    v,
+                    ref or '?',
+                )
+                return
+            if not self._hub_write_hold_setpoints(comfort_sp[0], comfort_sp[1]):
+                return
         if self._hub_write(c, hub_byte):
+            self._hk_last_comfort_byte = int(hub_byte)
             self.set_driver_safe('GV3', v)
+            if comfort_sp is not None:
+                self.set_driver_safe('CLISPH', comfort_sp[0])
+                self.set_driver_safe('CLISPC', comfort_sp[1])
             self._remember_hk_comfort_signature(v)
             self._mark_hold_active(cmd)
 

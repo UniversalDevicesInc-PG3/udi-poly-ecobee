@@ -7,6 +7,17 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.7] - 2026-06-23
+
+### Fixed
+
+- **HomeKit GV3 (Climate Type) commands:** comforts that share the HAP **Temp** slot (or collide with **Away** on the wire) now write that comfort’s heat/cool setpoints before ``VENDOR_ECOBEE_SET_HOLD_SCHEDULE``, using learned signatures, vendor snapshot targets (home/sleep/away), and configured-comfort mapping (HK slot **Smart1** → first extra comfort such as **Vacation**). Commands abort when setpoints are not known yet instead of reporting success with no change on the stat.
+
+### Added
+
+- **HomeKit startup comfort cache:** after the hub connects (and when the device list is processed), each HomeKit thermostat automatically runs a debounced hub snapshot (same as **QUERY**) to cache vendor **Home / Sleep / Away** target setpoints and to learn extra-comfort signatures when the stat is on them at refresh time.
+- **Docs:** [docs/HOMEKIT_GV3_SETPOINTS.md](docs/HOMEKIT_GV3_SETPOINTS.md) — HomeKit **Climate Type** status (4.1.6), command setpoints (4.1.7), and startup cache behavior. **README.md** and **CONFIG.md** updated to use IoX labels from `en_us.txt` (not driver IDs).
+
 ## [4.1.6] - 2026-06-23
 
 ### Fixed

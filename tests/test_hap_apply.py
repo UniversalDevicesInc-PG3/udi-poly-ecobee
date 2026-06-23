@@ -8,10 +8,14 @@ from homekit_client.hap_apply import (
     ECOBEE_HK_COMFORT_TEMP,
     apply_characteristic_to_thermostat,
     clifs_to_hap_fan_target,
+    gv3_command_needs_setpoints,
+    gv3_to_comfort_ref,
     gv3_to_ecobee_set_hold_schedule,
     hap_current_fan_state_to_clifrs,
     hap_current_heating_cooling_to_clihcs,
     iox_temp_to_hap_celsius,
+    parse_ecobee_vendor_comfort_target,
+    resolve_gv3_comfort_setpoints,
     resolve_hk_comfort_gv3,
 )
 from node_funcs import climateMap
@@ -222,3 +226,47 @@ def test_resolve_hk_home_byte_ignores_setpoints():
     gv, cache = resolve_hk_comfort_gv3(0, heat_sp=45.0, cool_sp=85.0, configured_refs=('home',))
     assert gv == climateMap['home']
     assert cache == {}
+
+
+def test_parse_ecobee_vendor_comfort_target_home_heat():
+    assert parse_ecobee_vendor_comfort_target('VENDOR_ECOBEE_HOME_TARGET_HEAT') == ('home', 'heat')
+
+
+def test_gv3_command_needs_setpoints_for_temp_and_vacation():
+    assert gv3_command_needs_setpoints(climateMap['smart1']) is True
+    assert gv3_command_needs_setpoints(climateMap['vacation']) is True
+    assert gv3_command_needs_setpoints(climateMap['home']) is False
+
+
+def test_gv3_to_comfort_ref_maps_hk_slot_three_to_first_extra():
+    refs = ('home', 'away', 'sleep', 'vacation', 'smartAway')
+    assert gv3_to_comfort_ref(climateMap['smart1'], refs) == 'vacation'
+
+
+def test_resolve_gv3_comfort_setpoints_uses_vendor_cache():
+    sp = resolve_gv3_comfort_setpoints(
+        climateMap['home'],
+        configured_refs=('home', 'away', 'sleep'),
+        vendor_comfort_sp={'home': (71.0, 76.0)},
+    )
+    assert sp == (71.0, 76.0)
+
+
+def test_resolve_gv3_comfort_setpoints_hk_slot_finds_learned_vacation():
+    refs = ('home', 'away', 'sleep', 'vacation', 'smartAway')
+    cache = {(50.0, 85.0): climateMap['vacation']}
+    sp = resolve_gv3_comfort_setpoints(
+        climateMap['smart1'],
+        configured_refs=refs,
+        sp_sig_to_gv3=cache,
+    )
+    assert sp == (50.0, 85.0)
+
+
+def test_apply_vendor_home_target_heat_caches_on_node():
+    node = MagicMock()
+    node.use_celsius = False
+    node.remember_hk_vendor_comfort_target = MagicMock()
+    type(node).__name__ = 'HomeKitThermostat'
+    assert apply_characteristic_to_thermostat(node, 'VENDOR_ECOBEE_HOME_TARGET_HEAT', 21.8) is True
+    node.remember_hk_vendor_comfort_target.assert_called_once_with('home', 'heat', 21.8)
