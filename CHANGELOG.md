@@ -95,7 +95,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ### Fixed
 
 - **HomeKit thermostat heating setpoints (Fahrenheit):** heat writes now use the **lowest** compatible **0.1 C** bin for Ecobee display parity, which avoids the remaining **72 F -> 73 F** case on the physical thermostat.
-- **HomeKit hub reconnect after reboot:** the Ecobee MQTT client now documents the **hello** retry schedule and keeps retrying until the hub acknowledges, so startup races with **udi-poly-homekit** no longer leave the backend disconnected after an eisy reboot.
+- **HomeKit hub reconnect after reboot:** the Ecobee MQTT client now documents the **hello** retry schedule and keeps retrying until the hub acknowledges, so startup races with **udi-poly-homekit-hub** no longer leave the backend disconnected after an eisy reboot.
 - **PG3 notices:** Ecobee notice helpers now prepend a local timestamp across controller, cloud, and HomeKit notice paths so warnings in the Polyglot UI include the time they were generated.
 
 ## [4.1.1] - 2026-05-11
@@ -165,7 +165,7 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ### Fixed
 
-- **HomeKit backend:** hub **`command`** RPC failures (for example HAP **-70410** invalid value) now raise the same PG3 **`homekit_hub_rpc_error`** notice as on udi-poly-homekit, with **`command`**, **`device_id`**, transport (**MQTT `client_slug`** or WebSocket), **`characteristic`**, and value context; hub **`command_sync`** timeouts are noticed as well.
+- **HomeKit backend:** hub **`command`** RPC failures (for example HAP **-70410** invalid value) now raise the same PG3 **`homekit_hub_rpc_error`** notice as on udi-poly-homekit-hub, with **`command`**, **`device_id`**, transport (**MQTT `client_slug`** or WebSocket), **`characteristic`**, and value context; hub **`command_sync`** timeouts are noticed as well.
 - **HomeKit thermostat / HAP:** mode-aware setpoint and threshold writes, heat/cool span handling, and IoX temperature rounding in **`hap_apply`** to avoid invalid HAP writes.
 
 ## [4.0.1] - 2026-05-03
@@ -180,18 +180,18 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [4.0.0] - 2026-05-02
 
-Major release: **HomeKit hub integration** with [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) is the supported path for new installs; Ecobee cloud/API remains for legacy deployments only.
+Major release: **HomeKit hub integration** with [udi-poly-homekit-hub](https://github.com/jimboca/udi-poly-homekit-hub) is the supported path for new installs; Ecobee cloud/API remains for legacy deployments only.
 
 ### Added
 
-- **HomeKit hub MQTT client** — optional Custom Param **`hk_transport`** = **`mqtt`** with **`hk_mqtt_*`** broker and topic slugs (**`HubMqttClient`**, **aiomqtt**); same JSON protocol as WebSocket when udi-poly-homekit has **`mqtt_enable`** (see udi-poly-homekit **`PROTOCOL.md`**).
-- **HomeKit backend** — WebSocket client to the udi-poly-homekit hub (hello `ack` pairing list, multiplexed `command` / `snapshot` / `get` RPC, hub `warnings` mirrored to PG3 Notices).
-- **PG3 Notice `homekit_hub_unreachable`** — when the hub WebSocket fails (connection or hello), with guidance to install and configure udi-poly-homekit and set `hk_ws_url` / `hk_ws_token`.
+- **HomeKit hub MQTT client** — optional Custom Param **`hk_transport`** = **`mqtt`** with **`hk_mqtt_*`** broker and topic slugs (**`HubMqttClient`**, **aiomqtt**); same JSON protocol as WebSocket when udi-poly-homekit-hub has **`mqtt_enable`** (see udi-poly-homekit-hub **`PROTOCOL.md`**).
+- **HomeKit backend** — WebSocket client to the udi-poly-homekit-hub hub (hello `ack` pairing list, multiplexed `command` / `snapshot` / `get` RPC, hub `warnings` mirrored to PG3 Notices).
+- **PG3 Notice `homekit_hub_unreachable`** — when the hub WebSocket fails (connection or hello), with guidance to install and configure udi-poly-homekit-hub and set `hk_ws_url` / `hk_ws_token`.
 - **`default_backend_for_new_param_seed`** — when Custom Param `backend` is missing, seed **`homekit`** for a fresh nodeserver and **`cloud`** when OAuth, non-empty `api_key`, Ecobee `tokenData` / PIN in customdata, or existing non-controller nodes indicate a legacy cloud install.
 
 ### Changed
 
-- **Documentation (`README.md`, `CONFIG.md`)** — install/configure udi-poly-homekit first; Ecobee/UDI shared cloud API access is discontinued; cloud only viable with a personal developer key obtained before Ecobee disabled UDI keys.
+- **Documentation (`README.md`, `CONFIG.md`)** — install/configure udi-poly-homekit-hub first; Ecobee/UDI shared cloud API access is discontinued; cloud only viable with a personal developer key obtained before Ecobee disabled UDI keys.
 - **WebSocket client** — pairing list always taken from hello `ack` `devices[]` (including empty); clear cached devices on new connection; optional `on_transport_error` callback; no reliance on an automatic second `list_devices` frame from the hub.
 
 ### Fixed

@@ -8,7 +8,7 @@ Questions: [PG3 Ecobee SubForum](https://forum.universal-devices.com/forum/322-e
 
 **[CONFIG.md](CONFIG.md)** — step-by-step setup for new installations.
 
-For **HomeKit hub mode** (recommended): install and pair on **[udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit)** first, then follow **[Ecobee quick start (HomeKit)](CONFIG.md#ecobee-quick-start-homekit)** in this repo's CONFIG.
+For **HomeKit hub mode** (recommended): install and pair on **[udi-poly-homekit-hub](https://github.com/jimboca/udi-poly-homekit-hub)** first, then follow **[Ecobee quick start (HomeKit)](CONFIG.md#ecobee-quick-start-homekit)** in this repo's CONFIG.
 
 ## Cloud mode
 

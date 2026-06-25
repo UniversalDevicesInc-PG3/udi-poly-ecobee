@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-1. **Install and pair on [udi-poly-homekit](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit) first** — follow its [CONFIG.md — Ecobee + IoX quick start](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit/blob/master/CONFIG.md#ecobee--iox-quick-start). Your Ecobee must be paired on that hub and **not** left paired only to Apple Home.
+1. **Install and pair on [udi-poly-homekit-hub](https://github.com/jimboca/udi-poly-homekit-hub) first** — follow its [CONFIG.md — Ecobee + IoX quick start](https://github.com/jimboca/udi-poly-homekit-hub/blob/master/CONFIG.md#ecobee--iox-quick-start). Your Ecobee must be paired on that hub and **not** left paired only to Apple Home.
 2. This Node Server does **not** replace the HomeKit hub; it connects to it over **MQTT** (default) or **WebSocket**.
 
 **Ecobee cloud (REST API):** Ecobee has cut off UDI / Polyglot Cloud OAuth for this integration. **New setups should use HomeKit hub mode.** Cloud mode only remains viable with a **personal Ecobee developer `api_key`** you registered before shared keys stopped working — see [Cloud backend (legacy)](#cloud-backend-legacy) below.
@@ -15,7 +15,7 @@
 
 ## Ecobee quick start (HomeKit)
 
-1. Complete [HomeKit hub pairing](https://github.com/UniversalDevicesInc-PG3/udi-poly-homekit/blob/master/CONFIG.md#ecobee--iox-quick-start) first. Confirm hub **GV0** = `1` and **GV1** = `2` (MQTT connected).
+1. Complete [HomeKit hub pairing](https://github.com/jimboca/udi-poly-homekit-hub/blob/master/CONFIG.md#ecobee--iox-quick-start) first. Confirm hub **GV0** = `1` and **GV1** = `2` (MQTT connected).
 2. Add **Ecobee** from the PG3 store and start the Node Server.
 3. Open **Configuration** → **Custom Configuration Parameters**.
 4. On a **fresh install** you should see:
@@ -67,7 +67,7 @@ On the **Ecobee Controller** node (HomeKit mode):
 
 - **`homekit_hub_unreachable`** — cannot connect or hello failed; check hub is running and slug/host/port match.
 - **`homekit_hub_disconnected`** — session dropped while retrying (deduped in UI about every 45 seconds).
-- **`homekit_hub_warnings`** — structured warnings from the hub (see udi-poly-homekit **PROTOCOL.md**).
+- **`homekit_hub_warnings`** — structured warnings from the hub (see udi-poly-homekit-hub **PROTOCOL.md**).
 - **`homekit_no_thermostat`** — hub sent devices but none became a thermostat node (includes JSON snapshot).
 
 ---
@@ -85,7 +85,7 @@ On the **Ecobee Controller** node (HomeKit mode):
 
 ### Ecobee NS starts but no thermostats appear
 
-1. Confirm **udi-poly-homekit** has the Ecobee paired (child node **ST** = paired on the hub).
+1. Confirm **udi-poly-homekit-hub** has the Ecobee paired (child node **ST** = paired on the hub).
 2. Confirm hub **GV0** = `1` and **GV1** = `2`.
 3. Confirm **`hk_mqtt_hub_slug`** matches hub **`mqtt_hub_slug`** (usually both `default`).
 4. Check Notice **`homekit_no_thermostat`** and hub **`homekit_hub_warnings`**.
@@ -112,7 +112,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | --------- | -------- | ----------- |
 | `backend` | No | **`homekit`** or **`cloud`**. Seeding rules in [Ecobee quick start](#ecobee-quick-start-homekit). **`cloud`**: only realistic with a personal developer **`api_key`**. |
 | `hk_transport` | No | **`mqtt`** (default, preferred) or **`websocket`**. Saving transport or `hk_*` fields restarts the hub client. |
-| `hk_ws_url` | WS fallback | WebSocket URL of **udi-poly-homekit**, e.g. `ws://127.0.0.1:8163`. |
+| `hk_ws_url` | WS fallback | WebSocket URL of **udi-poly-homekit-hub**, e.g. `ws://127.0.0.1:8163`. |
 | `hk_ws_token` | No | Optional hello token (**WebSocket only**). |
 | `hk_mqtt_host` | MQTT | Broker hostname. Default `localhost`. |
 | `hk_mqtt_port` | MQTT | Broker port. Default `1884`. |
@@ -217,7 +217,7 @@ Extra comforts that have never been active on the stat may still need one activa
 
 ### Overview
 
-- **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit**.
+- **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit-hub**.
 - Thermostats appear as **`t…`** nodes; remote sensors as **`rs…`**. **No weather / forecast nodes** on HomeKit.
 - **Realtime updates** from hub events; **Query** triggers a snapshot read. On hub connect / Node Server start, each thermostat also gets an automatic debounced snapshot to cache comfort setpoints for **Climate Type** commands.
 - Hub metadata characteristics are informational only (not copied to IoX drivers). Unknown HAP chars may log **`homekit_unknown_chars`** notices.

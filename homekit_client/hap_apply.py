@@ -537,7 +537,7 @@ def climd_to_hap_target_mode(climd: int) -> int:
 
 
 # aiohomekit ``CharacteristicsTypes`` attribute names for hub ``command`` / ``get`` (or a HAP UUID).
-# udi-poly-homekit resolves these via ``hasattr(CharacteristicsTypes, spec)`` — not Apple PascalCase.
+# udi-poly-homekit-hub resolves these via ``hasattr(CharacteristicsTypes, spec)`` — not Apple PascalCase.
 def hap_name_target_heating_cooling() -> str:
     return 'HEATING_COOLING_TARGET'
 

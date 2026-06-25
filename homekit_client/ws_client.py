@@ -1,4 +1,4 @@
-"""Async WebSocket client for udi-poly-homekit hub (dedicated thread + reconnect)."""
+"""Async WebSocket client for udi-poly-homekit-hub hub (dedicated thread + reconnect)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class HubWebSocketClient:
     frames (``list_devices`` when requested or hub-pushed, ``event``, …).
 
     ``snapshot`` / ``get`` / ``command`` may be **multiplexed**: each call sends a unique ``id`` and
-    waits on its own future. The hub echoes ``id`` on success and error replies (udi-poly-homekit).
+    waits on its own future. The hub echoes ``id`` on success and error replies (udi-poly-homekit-hub).
     Legacy hubs that omit ``id`` on replies are supported only when a single in-flight RPC of that
     type matches (same ``device_id`` for snapshot/get).
     """
@@ -172,7 +172,7 @@ class HubWebSocketClient:
         self._log.debug('homekit hub rx: %s', s)
 
     def _dispatch_hub_warnings(self, data: Dict[str, Any]) -> None:
-        """Forward hub ``warnings`` array (hello ``ack`` / ``list_devices`` per udi-poly-homekit PROTOCOL)."""
+        """Forward hub ``warnings`` array (hello ``ack`` / ``list_devices`` per udi-poly-homekit-hub PROTOCOL)."""
         if 'warnings' not in data:
             return
         raw = data.get('warnings')

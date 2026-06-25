@@ -1,4 +1,4 @@
-"""MQTT hello retry behavior for delayed udi-poly-homekit hub startup."""
+"""MQTT hello retry behavior for delayed udi-poly-homekit-hub hub startup."""
 
 from __future__ import annotations
 

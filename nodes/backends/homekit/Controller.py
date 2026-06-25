@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HomeKit hub backend: WebSocket to udi-poly-homekit, node sync (incremental)."""
+"""HomeKit hub backend: WebSocket to udi-poly-homekit-hub, node sync (incremental)."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ _THERM_SNAPSHOT_REFRESH_UUID_NORM = frozenset(
     if x
 )
 
-# IoX controller **GV4** (WebSocket) / **GV5** (MQTT), UOM 25 index (same labels as udi-poly-homekit hub **GV1**).
+# IoX controller **GV4** (WebSocket) / **GV5** (MQTT), UOM 25 index (same labels as udi-poly-homekit-hub hub **GV1**).
 _HK_PATH_UNUSED = 0
 _HK_PATH_NOT_CONNECTED = 1
 _HK_PATH_CONNECTED = 2
@@ -149,7 +149,7 @@ class HomeKitBackend:
     ) -> None:
         """Log **WARNING** and optionally set a PG3 **Notice** (HTML body is concatenated after the title).
 
-        Same pattern as **udi-poly-homekit** ``nodes.Controller._pg3_warn_and_notice`` (duplicated on purpose so
+        Same pattern as **udi-poly-homekit-hub** ``nodes.Controller._pg3_warn_and_notice`` (duplicated on purpose so
         each Node Server stays self-contained—no cross-package coupling).
         """
         LOGGER.warning('%s', log_message)
@@ -173,7 +173,7 @@ class HomeKitBackend:
         value: Any,
         message: str,
     ) -> None:
-        """Mirror **udi-poly-homekit** hub ``hub_rpc_error_notice`` on **this** Node Server’s Notices.
+        """Mirror **udi-poly-homekit-hub** hub ``hub_rpc_error_notice`` on **this** Node Server’s Notices.
 
         The hub asyncio bridge sets ``homekit_hub_rpc_error`` on the HomeKit NS only; Ecobee’s
         :meth:`hub_command` runs here and must set the same key so operators see the failure on
@@ -508,7 +508,7 @@ class HomeKitBackend:
 
     def _on_hub_warnings(self, warnings: List[Dict[str, Any]]) -> None:
         """
-        Hub PROTOCOL ``warnings`` on hello ``ack`` and ``list_devices`` (udi-poly-homekit).
+        Hub PROTOCOL ``warnings`` on hello ``ack`` and ``list_devices`` (udi-poly-homekit-hub).
         Log each entry and mirror to PG3 Notices under ``homekit_hub_warnings``.
         """
         if not warnings:
@@ -547,7 +547,7 @@ class HomeKitBackend:
             return
         self._set_notice_html(
             'homekit_hub_warnings',
-            '<p>From <b>udi-poly-homekit</b> hub (<code>warnings</code> in PROTOCOL):</p>'
+            '<p>From <b>udi-poly-homekit-hub</b> hub (<code>warnings</code> in PROTOCOL):</p>'
             + '<br/>'.join(lines),
         )
 
@@ -633,11 +633,11 @@ class HomeKitBackend:
                 log_message=log_line,
                 notice_html=(
                     f'<p><code>{detail}</code></p>'
-                    '<p>Install and configure <b>udi-poly-homekit</b> with <code>mqtt_enable=true</code> and a LAN '
+                    '<p>Install and configure <b>udi-poly-homekit-hub</b> with <code>mqtt_enable=true</code> and a LAN '
                     'broker, then set this Node Server <code>hk_transport</code> to <code>mqtt</code> and match '
                     '<code>hk_mqtt_*</code> Custom Params to the hub (<code>hk_mqtt_hub_slug</code> must match the '
                     'hub, <code>hk_mqtt_client_slug</code> must match the MQTT topic segment). See <b>README.md</b> '
-                    'and <b>udi-poly-homekit</b> <b>PROTOCOL.md</b>.</p>'
+                    'and <b>udi-poly-homekit-hub</b> <b>PROTOCOL.md</b>.</p>'
                 ),
             )
         else:
@@ -647,7 +647,7 @@ class HomeKitBackend:
                 log_message=log_line,
                 notice_html=(
                     f'<p><code>{detail}</code></p>'
-                    '<p>Install and configure <b>udi-poly-homekit</b> in Polyglot, pair your Ecobee(s), enable the '
+                    '<p>Install and configure <b>udi-poly-homekit-hub</b> in Polyglot, pair your Ecobee(s), enable the '
                     'hub WebSocket (<code>ws_host</code> / <code>ws_port</code>), then set this Node Server '
                     'Custom Params <code>hk_ws_url</code> (and <code>hk_ws_token</code> if the hub requires it). '
                     'See <b>README.md</b> and <b>CONFIG.md</b>.</p>'
@@ -676,7 +676,7 @@ class HomeKitBackend:
                 log_message=log_line,
                 notice_html=(
                     '<p>The hub client lost its session (network flap, hub restart, or broker drop). '
-                    'If this keeps appearing, verify <b>udi-poly-homekit</b> is running, '
+                    'If this keeps appearing, verify <b>udi-poly-homekit-hub</b> is running, '
                     '<code>hk_transport</code> matches the hub, and broker ACLs allow this client.</p>'
                 ),
             )
@@ -1051,7 +1051,7 @@ class HomeKitBackend:
                 'Each row needs a non-empty <code>device_id</code> and either pairing-level HAP '
                 '<b>category</b> 9 / <code>category_label</code> THERMOSTAT, or per-aid summaries in '
                 '<code>accessories[]</code> (category 9, THERMOSTAT, or <code>thermostat_like</code>). '
-                'Update <b>udi-poly-homekit</b> if metadata is incomplete; see hub PROTOCOL.</p>'
+                'Update <b>udi-poly-homekit-hub</b> if metadata is incomplete; see hub PROTOCOL.</p>'
                 f'<pre style="white-space:pre-wrap">{safe}</pre>',
             )
         except Exception:

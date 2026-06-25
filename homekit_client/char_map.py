@@ -115,7 +115,7 @@ _UUID_INFORMATIONAL_NORMALIZED: FrozenSet[str] = frozenset(
             normalize_hap_uuid('00000037-0000-1000-8000-0026BB765291'),  # Version
             normalize_hap_uuid('000000A6-0000-1000-8000-0026BB765291'),  # Accessory Properties
             normalize_hap_uuid('00000220-0000-1000-8000-0026BB765291'),  # Product Data (HAP)
-            # Vendor / bridge UUIDs seen on Ecobee via udi-poly-homekit (not mapped to IoX).
+            # Vendor / bridge UUIDs seen on Ecobee via udi-poly-homekit-hub (not mapped to IoX).
             normalize_hap_uuid('34AB8811-AC7F-4340-BAC3-FD6A85F9943B'),
             normalize_hap_uuid('4A6AE4F6-036C-495D-87CC-B3702B437741'),
             normalize_hap_uuid('DB7BF261-7042-4194-8BD1-3AA22830AEDD'),
@@ -326,7 +326,7 @@ def thermostat_control_aid_from_snapshot_values(values: Any) -> Optional[int]:
     """
     Return the ``aid`` that exposes heating/cooling controls, inferred from a hub ``snapshot``.
 
-    Hub ``primary_aid`` (udi-poly-homekit ``list_devices``) can point at a child such as
+    Hub ``primary_aid`` (udi-poly-homekit-hub ``list_devices``) can point at a child such as
     **Occupancy** when it has the lowest non-bridge ``aid``. Thermostat setpoints and mode live
     on another ``aid``; this function finds that accessory by scoring characteristic rows.
     """
@@ -357,7 +357,7 @@ def accessory_display_name_from_snapshot_rows(rows: Any) -> Optional[str]:
     """
     Best-effort accessory label from hub ``snapshot`` / ``get`` rows for one ``aid``.
 
-    udi-poly-homekit (and aiohomekit) typically emit **Name** / **Configured Name** as full UUID
+    udi-poly-homekit-hub (and aiohomekit) typically emit **Name** / **Configured Name** as full UUID
     characteristic ids. Older Ecobee HomeKit code only matched ``'NAME' in characteristic`` and
     missed those, so remote sensors fell back to ``Ecobee - Sensor aid <aid>``.
 

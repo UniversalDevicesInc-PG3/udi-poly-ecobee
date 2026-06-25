@@ -1,4 +1,4 @@
-"""Async MQTT client for udi-poly-homekit hub (dedicated thread + reconnect)."""
+"""Async MQTT client for udi-poly-homekit-hub hub (dedicated thread + reconnect)."""
 
 from __future__ import annotations
 

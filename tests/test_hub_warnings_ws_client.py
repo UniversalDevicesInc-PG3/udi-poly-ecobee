@@ -1,4 +1,4 @@
-"""Hub WebSocket ``warnings`` dispatch (udi-poly-homekit PROTOCOL)."""
+"""Hub WebSocket ``warnings`` dispatch (udi-poly-homekit-hub PROTOCOL)."""
 
 from __future__ import annotations
 
