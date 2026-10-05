@@ -7,6 +7,8 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.11] - 2026-10-05
+
 ### Fixed
 
 - **Celsius display and programs:** after **`use_celsius=true`**, temperature status no longer keeps a leftover Fahrenheit UOM from PG3. Admin Console shows °C, and program **If** conditions use the same Celsius scale as **Heat Setpoint** / **Cool Setpoint** commands. Switching **`use_celsius`** republishes ``EcobeeHKC_*`` / ``EcobeeHKF_*`` (and sensor HC/HF) nodedefs and restores driver UOMs. Also corrects Celsius **Cool Setpoint** (was UOM 67) and **Mode** (was UOM 68) in ``driversMap``.
