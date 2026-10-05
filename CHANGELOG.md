@@ -10,10 +10,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ### Fixed
 
 - **Celsius display and programs:** after **`use_celsius=true`**, temperature status no longer keeps a leftover Fahrenheit UOM from PG3. Admin Console shows °C, and program **If** conditions use the same Celsius scale as **Heat Setpoint** / **Cool Setpoint** commands. Switching **`use_celsius`** republishes ``EcobeeHKC_*`` / ``EcobeeHKF_*`` (and sensor HC/HF) nodedefs and restores driver UOMs. Also corrects Celsius **Cool Setpoint** (was UOM 67) and **Mode** (was UOM 68) in ``driversMap``.
+- **HomeKit comfort commands:** a **45 °F** heat setpoint was sent as **7.0 °C**, below Ecobee's heating minimum (**7.2 °C**). The hub rejected it (**-70410** invalid value) on **Climate Type** writes. Heat and cool writes now stay inside Ecobee's Celsius limits.
+- **HomeKit hub warnings:** device-scoped hub notices (such as **`accessories_load_failed`**) are shown only when the ``device_id`` is an Ecobee thermostat or sensor this Node Server imported. Warnings for other pairings on the same hub are ignored.
 
 ### Changed
 
-- **HomeKit unmapped notices:** treat HAP **Current Transport**, **Wi-Fi Capabilities**, and **Wi-Fi Configuration Control** as informational metadata (no IoX drivers). They no longer appear in **`homekit_unknown_chars`** notices.
+- **HomeKit unmapped notices:** treat bridge metadata (Wi-Fi/transport, Siri, AirPlay, media, diagnostics) as informational. Those characteristics no longer appear in **`homekit_unknown_chars`** notices.
 
 ## [4.1.10] - 2026-06-23
 

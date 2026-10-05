@@ -76,6 +76,32 @@ _INFORMATIONAL_NAME_FRAGMENTS: FrozenSet[str] = frozenset(
         'CURRENT_TRANSPORT',
         'WI_FI_CAPABILITIES',
         'WI_FI_CONFIGURATION_CONTROL',
+        # Ecobee bridge services this plugin does not drive (Siri, AirPlay, media, diagnostics).
+        'SUPPORTED_DATA_STREAM_TRANSPORT_DATA_CONFIGURATION',
+        'SUPPORTED_AUDIO_CONFIGURATION',
+        'SELECTED_AUDIO_STREAM_CONFIGURATION',
+        'SIRI_INPUT_TYPE',
+        'SIRI_ENABLE',
+        'SIRI_LISTENING',
+        'SIRI_TOUCH_TO_USE',
+        'SIRI_LIGHT_ON_USE',
+        'SIRI_ENGINE_VERSION',
+        'SIRI_ENDPOINT_SESSION_STATUS',
+        'MULTIFUNCTION_BUTTON',
+        'ACTIVE_IDENTIFIER',
+        'MANUALLY_DISABLED',
+        'IDENTIFIER',
+        'SUPPORTED_ASSET_TYPES',
+        'ASSET_UPDATE_READINESS',
+        'CURRENT_MEDIA_STATE',
+        'TARGET_MEDIA_STATE',
+        'AIRPLAY_ENABLE',
+        'ACCESS_CONTROL_LEVEL',
+        'PASSWORD_SETTING',
+        'SUPPORTED_DIAGNOSTICS_SNAPSHOT',
+        'PING',
+        'MUTE',
+        'VOLUME',
     }
 )
 
@@ -122,6 +148,34 @@ _UUID_INFORMATIONAL_NORMALIZED: FrozenSet[str] = frozenset(
             normalize_hap_uuid('0000022B-0000-1000-8000-0026BB765291'),  # Current Transport
             normalize_hap_uuid('0000022C-0000-1000-8000-0026BB765291'),  # Wi-Fi Capabilities
             normalize_hap_uuid('0000022D-0000-1000-8000-0026BB765291'),  # Wi-Fi Configuration Control
+            normalize_hap_uuid('00000130-0000-1000-8000-0026BB765291'),  # Supported Data Stream Transport
+            normalize_hap_uuid('00000115-0000-1000-8000-0026BB765291'),  # Supported Audio
+            normalize_hap_uuid('00000128-0000-1000-8000-0026BB765291'),  # Selected Audio Stream
+            normalize_hap_uuid('00000132-0000-1000-8000-0026BB765291'),  # Siri Input Type
+            normalize_hap_uuid('00000254-0000-1000-8000-0026BB765291'),  # Siri Endpoint Session Status
+            normalize_hap_uuid('00000255-0000-1000-8000-0026BB765291'),  # Siri Enable
+            normalize_hap_uuid('00000256-0000-1000-8000-0026BB765291'),  # Siri Listening
+            normalize_hap_uuid('00000257-0000-1000-8000-0026BB765291'),  # Siri Touch To Use
+            normalize_hap_uuid('00000258-0000-1000-8000-0026BB765291'),  # Siri Light On Use
+            normalize_hap_uuid('0000025A-0000-1000-8000-0026BB765291'),  # Siri Engine Version
+            normalize_hap_uuid('0000025B-0000-1000-8000-0026BB765291'),  # AirPlay Enable
+            normalize_hap_uuid('0000026B-0000-1000-8000-0026BB765291'),  # Multifunction Button
+            normalize_hap_uuid('000000E7-0000-1000-8000-0026BB765291'),  # Active Identifier
+            normalize_hap_uuid('000000E6-0000-1000-8000-0026BB765291'),  # Identifier
+            normalize_hap_uuid('000000B0-0000-1000-8000-0026BB765291'),  # Active
+            normalize_hap_uuid('00000227-0000-1000-8000-0026BB765291'),  # Manually Disabled
+            normalize_hap_uuid('00000268-0000-1000-8000-0026BB765291'),  # Supported Asset Types
+            normalize_hap_uuid('00000269-0000-1000-8000-0026BB765291'),  # Asset Update Readiness
+            normalize_hap_uuid('000000E0-0000-1000-8000-0026BB765291'),  # Current Media State
+            normalize_hap_uuid('00000137-0000-1000-8000-0026BB765291'),  # Target Media State
+            normalize_hap_uuid('0000011A-0000-1000-8000-0026BB765291'),  # Mute
+            normalize_hap_uuid('00000119-0000-1000-8000-0026BB765291'),  # Volume
+            normalize_hap_uuid('000000E5-0000-1000-8000-0026BB765291'),  # Access Control Level
+            normalize_hap_uuid('000000E4-0000-1000-8000-0026BB765291'),  # Password Setting
+            normalize_hap_uuid('0000023C-0000-1000-8000-0026BB765291'),  # Ping
+            normalize_hap_uuid('00000238-0000-1000-8000-0026BB765291'),  # Supported Diagnostics Snapshot
+            normalize_hap_uuid('00000271-0000-1000-8000-0026BB765291'),  # seen on Ecobee bridge
+            normalize_hap_uuid('00000272-0000-1000-8000-0026BB765291'),  # seen on Ecobee bridge
             # Vendor / bridge UUIDs seen on Ecobee via udi-poly-homekit-hub (not mapped to IoX).
             normalize_hap_uuid('34AB8811-AC7F-4340-BAC3-FD6A85F9943B'),
             normalize_hap_uuid('4A6AE4F6-036C-495D-87CC-B3702B437741'),
@@ -207,7 +261,7 @@ def classify(characteristic: str, aid: int) -> CharBucket:
             if f in h or f in compact:
                 return CharBucket.MAPPED
     # Standalone Accessory Information **Name** labels (avoid ``*_*_NAME`` false positives, e.g. HAP names).
-    if norm in ('NAME', 'ACCESSORY_NAME'):
+    if norm in ('NAME', 'ACCESSORY_NAME', 'ACTIVE'):
         return CharBucket.INFORMATIONAL
     for frag in _INFORMATIONAL_NAME_FRAGMENTS:
         f = frag.upper()

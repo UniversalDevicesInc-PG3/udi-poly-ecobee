@@ -13,6 +13,8 @@ from homekit_client.hap_apply import (
     gv3_to_ecobee_set_hold_schedule,
     hap_current_fan_state_to_clifrs,
     hap_current_heating_cooling_to_clihcs,
+    iox_cool_to_hap_celsius,
+    iox_heat_to_hap_celsius,
     iox_temp_to_hap_celsius,
     parse_ecobee_vendor_comfort_target,
     resolve_gv3_comfort_setpoints,
@@ -138,6 +140,28 @@ def test_iox_temp_to_hap_fahrenheit_high_bias_picks_max_tenth_c():
     node = MagicMock()
     node.use_celsius = False
     assert iox_temp_to_hap_celsius(node, 75, fahrenheit_wire_bias='high') == 24.1
+
+
+def test_iox_heat_45f_is_ecobee_minimum_not_7c():
+    """45 °F low-bias bin is 7.0 °C; Ecobee heating minimum is 7.2 (-70410 on 7.0)."""
+    node = MagicMock()
+    node.use_celsius = False
+    assert iox_heat_to_hap_celsius(node, 45) == 7.2
+    assert iox_temp_to_hap_celsius(node, 45, fahrenheit_wire_bias='low') == 7.0
+
+
+def test_iox_cool_65f_stays_at_or_above_ecobee_minimum():
+    node = MagicMock()
+    node.use_celsius = False
+    assert iox_cool_to_hap_celsius(node, 65) == 18.3
+    assert iox_cool_to_hap_celsius(node, 78) == 25.3
+
+
+def test_iox_heat_celsius_driver_clamped_to_ecobee_minimum():
+    node = MagicMock()
+    node.use_celsius = True
+    assert iox_heat_to_hap_celsius(node, 7.0) == 7.2
+    assert iox_heat_to_hap_celsius(node, 21.0) == 21.0
 
 
 def test_iox_temp_to_hap_celsius_rounds_driver_to_tenth():

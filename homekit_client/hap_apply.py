@@ -35,6 +35,14 @@ _HAP_CURRENT_FAN_STATE_UUID_NORM = normalize_hap_uuid('000000AF-0000-1000-8000-0
 _HAP_HEATING_COOLING_TARGET_UUID_NORM = normalize_hap_uuid('00000033-0000-1000-8000-0026BB765291')
 _HAP_CURRENT_HEATING_COOLING_UUID_NORM = normalize_hap_uuid('0000000F-0000-1000-8000-0026BB765291')
 
+# Ecobee rejects HAP writes outside these Celsius bounds (-70410 invalid value).
+# 45 °F is the heat floor, but the lowest 0.1 °C bin that ``toF`` maps back to 45 is **7.0**,
+# which is below the heating-threshold minimum (**7.2**). Same pattern for cool at **65 °F** / **18.3**.
+ECOBEE_HAP_HEAT_MIN_C = 7.2
+ECOBEE_HAP_HEAT_MAX_C = 26.1
+ECOBEE_HAP_COOL_MIN_C = 18.3
+ECOBEE_HAP_COOL_MAX_C = 33.3
+
 
 def is_ecobee_current_mode_characteristic(characteristic: str) -> bool:
     """True for Ecobee vendor ``VENDOR_ECOBEE_CURRENT_MODE`` (name or UUID); value is remapped to IoX ``GV3``."""
@@ -495,11 +503,38 @@ def apply_characteristic_to_thermostat(
     return True
 
 
+def _fahrenheit_celsius_bins(driver_val: float) -> list[float]:
+    """0.1 °C values that :func:`node_funcs.toF` maps back to the same whole °F."""
+    t = int(round(float(driver_val)))
+    k0 = int(round((float(driver_val) - 32) / 1.8 * 10.0))
+    bins: list[float] = []
+    for dk in range(-40, 41):
+        c = (k0 + dk) / 10.0
+        if toF(c) != t:
+            continue
+        bins.append(c)
+    return bins
+
+
+def _within_celsius_bounds(
+    bins: list[float],
+    celsius_min: Optional[float],
+    celsius_max: Optional[float],
+) -> list[float]:
+    if celsius_min is None and celsius_max is None:
+        return bins
+    lo = -1e9 if celsius_min is None else float(celsius_min)
+    hi = 1e9 if celsius_max is None else float(celsius_max)
+    return [c for c in bins if lo - 1e-9 <= c <= hi + 1e-9]
+
+
 def iox_temp_to_hap_celsius(
     node: 'HomeKitThermostat',
     driver_val: float,
     *,
     fahrenheit_wire_bias: Optional[str] = None,
+    celsius_min: Optional[float] = None,
+    celsius_max: Optional[float] = None,
 ) -> float:
     """IoX thermostat temp driver → HAP **celsius** for ``put_characteristics``.
 
@@ -511,25 +546,60 @@ def iox_temp_to_hap_celsius(
     0.1 °C bin that still maps back to the same whole °F via :func:`node_funcs.toF` (used on
     inbound HAP). In practice the **lowest** compatible bin is safest for Ecobee display parity;
     the optional **high** bias is kept available for troubleshooting / alternate accessories.
+
+    When *celsius_min* / *celsius_max* are set, stay inside that range while keeping the same
+    whole °F when a bin exists (45 °F must be **7.2 °C**, not **7.0**).
     """
     if node.use_celsius:
-        c = float(driver_val)
-        return round(float(c) * 10.0) / 10.0
+        c = round(float(driver_val) * 10.0) / 10.0
+        bounded = _within_celsius_bounds([c], celsius_min, celsius_max)
+        if bounded:
+            return bounded[0]
+        if celsius_min is not None and c < float(celsius_min):
+            return float(celsius_min)
+        if celsius_max is not None and c > float(celsius_max):
+            return float(celsius_max)
+        return c
 
     if fahrenheit_wire_bias in ('low', 'high'):
-        t = int(round(float(driver_val)))
-        k0 = int(round((float(driver_val) - 32) / 1.8 * 10.0))
-        bins = []
-        for dk in range(-40, 41):
-            c = (k0 + dk) / 10.0
-            if toF(c) != t:
-                continue
-            bins.append(c)
+        bins = _within_celsius_bounds(
+            _fahrenheit_celsius_bins(driver_val), celsius_min, celsius_max
+        )
         if bins:
             return min(bins) if fahrenheit_wire_bias == 'low' else max(bins)
 
     c = _driver_st_to_hap_c(node, driver_val)
-    return round(float(c) * 10.0) / 10.0
+    c = round(float(c) * 10.0) / 10.0
+    bounded = _within_celsius_bounds([c], celsius_min, celsius_max)
+    if bounded:
+        return bounded[0]
+    if celsius_min is not None and c < float(celsius_min):
+        return float(celsius_min)
+    if celsius_max is not None and c > float(celsius_max):
+        return float(celsius_max)
+    return c
+
+
+def iox_heat_to_hap_celsius(node: 'HomeKitThermostat', driver_val: float) -> float:
+    """Heat setpoint → HAP Celsius inside Ecobee's heating-threshold range."""
+    return iox_temp_to_hap_celsius(
+        node,
+        driver_val,
+        fahrenheit_wire_bias='low',
+        celsius_min=ECOBEE_HAP_HEAT_MIN_C,
+        celsius_max=ECOBEE_HAP_HEAT_MAX_C,
+    )
+
+
+def iox_cool_to_hap_celsius(node: 'HomeKitThermostat', driver_val: float) -> float:
+    """Cool setpoint → HAP Celsius inside Ecobee's cooling-threshold range."""
+    return iox_temp_to_hap_celsius(
+        node,
+        driver_val,
+        fahrenheit_wire_bias='low',
+        celsius_min=ECOBEE_HAP_COOL_MIN_C,
+        celsius_max=ECOBEE_HAP_COOL_MAX_C,
+    )
 
 
 def climd_to_hap_target_mode(climd: int) -> int:

@@ -133,6 +133,7 @@ class HomeKitBackend:
         self._hk_last_use_celsius: Optional[bool] = None
         self._hk_last_disconnect_notice_monotonic: float = 0.0
         self._unknown_char_notice_lines: List[str] = []
+        self._hk_last_hub_warnings: List[Dict[str, Any]] = []
         self._startup_refresh_timer: Optional[threading.Timer] = None
         self._startup_refresh_timer_lock = threading.Lock()
 
@@ -516,34 +517,63 @@ class HomeKitBackend:
             self.dispatcher.effective_params.get('hk_transport', DEFAULT_EFFECTIVE['hk_transport'])
         ).strip().lower()
 
+    def _known_ecobee_hub_device_ids(self) -> Set[str]:
+        """Hub ``device_id`` values this Node Server has imported (thermostats and their sensors)."""
+        ids: Set[str] = set()
+        for did in self._thermostat_by_device:
+            s = str(did or '').strip().lower()
+            if s:
+                ids.add(s)
+        for node in list(self._sensor_by_key.values()) + list(self._motion_sensor_by_device.values()):
+            s = str(getattr(node, 'device_id_hub', '') or '').strip().lower()
+            if s:
+                ids.add(s)
+        try:
+            nodes = self.poly.getNodes() or {}
+        except Exception:
+            nodes = {}
+        if isinstance(nodes, dict):
+            for node in nodes.values():
+                s = str(getattr(node, 'device_id_hub', '') or '').strip().lower()
+                if s:
+                    ids.add(s)
+        return ids
+
     def _on_hub_warnings(self, warnings: List[Dict[str, Any]]) -> None:
         """
         Hub PROTOCOL ``warnings`` on hello ``ack`` and ``list_devices`` (udi-poly-homekit-hub).
-        Log each entry and mirror to PG3 Notices under ``homekit_hub_warnings``.
+
+        Hello delivers warnings before this plugin has classified devices, so the raw list is
+        kept and republished after ``list_devices``. Device-scoped rows for pairings this
+        Node Server does not own (another accessory's ``accessories_load_failed``) are dropped.
         """
-        if not warnings:
-            try:
-                self.Notices.delete('homekit_hub_warnings')
-            except Exception:
-                LOGGER.debug('delete homekit_hub_warnings failed', exc_info=True)
-            return
+        self._hk_last_hub_warnings = [w for w in (warnings or []) if isinstance(w, dict)]
+        self._publish_hub_warnings()
+
+    def _publish_hub_warnings(self) -> None:
+        known = self._known_ecobee_hub_device_ids()
         lines: List[str] = []
-        for w in warnings:
-            if not isinstance(w, dict):
+        for w in self._hk_last_hub_warnings:
+            did_raw = w.get('device_id')
+            did = str(did_raw or '').strip().lower()
+            if did and did not in known:
+                LOGGER.debug(
+                    'HomeKit hub warning %s ignored; device_id %s is not an Ecobee node',
+                    w.get('code'),
+                    did,
+                )
                 continue
             lvl = str(w.get('level') or 'warning').strip().lower()
             code = html.escape(str(w.get('code') or 'unknown'))
             msg = html.escape(str(w.get('message') or ''))
-            did = w.get('device_id')
             pa = w.get('primary_aid')
             extra_parts: List[str] = []
-            if did is not None and str(did).strip():
-                extra_parts.append(f'device <code>{html.escape(str(did).strip())}</code>')
+            if did:
+                extra_parts.append(f'device <code>{html.escape(str(did_raw).strip())}</code>')
             if pa is not None and str(pa).strip() != '':
                 extra_parts.append(f'primary_aid={html.escape(str(pa))}')
             extra = ' (' + ', '.join(extra_parts) + ')' if extra_parts else ''
-            line = f'<b>{html.escape(lvl)}</b> <code>{code}</code>: {msg}{extra}'
-            lines.append(line)
+            lines.append(f'<b>{html.escape(lvl)}</b> <code>{code}</code>: {msg}{extra}')
             raw_msg = str(w.get('message') or '')
             if lvl == 'error':
                 LOGGER.error('HomeKit hub warning %s: %s', w.get('code'), raw_msg)
@@ -553,7 +583,7 @@ class HomeKitBackend:
             try:
                 self.Notices.delete('homekit_hub_warnings')
             except Exception:
-                pass
+                LOGGER.debug('delete homekit_hub_warnings failed', exc_info=True)
             return
         self._set_notice_html(
             'homekit_hub_warnings',
@@ -1271,6 +1301,7 @@ class HomeKitBackend:
                             )
             except Exception:
                 LOGGER.exception('HomeKit add thermostat %s failed', addr)
+        self._publish_hub_warnings()
         self._schedule_thermostat_startup_refresh()
 
     def _sensor_nodedef_homekit(self, use_celsius: bool) -> str:

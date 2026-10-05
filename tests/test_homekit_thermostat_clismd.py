@@ -100,6 +100,24 @@ def test_gv3_hold_type_from_query():
     node.set_driver_safe.assert_any_call('CLISMD', 2)
 
 
+def test_hold_setpoints_45f_writes_ecobee_heat_minimum():
+    """GV3 comfort with heat 45 °F must not send TEMPERATURE_HEATING_THRESHOLD=7.0."""
+    node = _make_node()
+    node.use_celsius = False
+    node._climd_write_mode = lambda: 3
+    node._heat_cool_min_span = lambda: 3.0
+    node._hub_write = MagicMock(return_value=True)
+
+    assert node._hub_write_hold_setpoints(45.0, 78.0) is True
+
+    assert node._hub_write.call_args_list[0].args == (
+        'TEMPERATURE_HEATING_THRESHOLD',
+        7.2,
+    )
+    assert node._hub_write.call_args_list[1].args[0] == 'TEMPERATURE_COOLING_THRESHOLD'
+    assert node._hub_write.call_args_list[1].args[1] == 25.3
+
+
 def test_cmd_set_gv3_vacation_writes_setpoints_then_hold():
     node = _make_node()
     node.getDriver.return_value = '3'

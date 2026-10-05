@@ -216,6 +216,73 @@ def test_handler_typed_data_refreshes_profile_without_hub(tmp_path, monkeypatch)
     assert f'CT_001-{climateMap["smart1"]} = Workshop' in nls
 
 
+class _Notices(dict):
+    def delete(self, key):
+        self.pop(key, None)
+
+
+def test_hub_warning_for_other_pairing_is_ignored():
+    hk = _hk()
+    hk.Notices = _Notices()
+    hk._on_hub_warnings(
+        [
+            {
+                'level': 'error',
+                'code': 'accessories_load_failed',
+                'message': 'list_accessories_and_characteristics failed',
+                'device_id': '23:8d:f1:57:46:2e',
+            }
+        ]
+    )
+    assert 'homekit_hub_warnings' not in hk.Notices
+
+
+def test_hub_warning_for_our_thermostat_is_kept():
+    hk = _hk()
+    hk.Notices = _Notices()
+    hk._thermostat_by_device['5d:1a:eb:a5:3c:3e'] = object()
+    hk._on_hub_warnings(
+        [
+            {
+                'level': 'error',
+                'code': 'accessories_load_failed',
+                'message': 'list_accessories_and_characteristics failed',
+                'device_id': '5D:1A:EB:A5:3C:3E',
+            }
+        ]
+    )
+    assert 'accessories_load_failed' in hk.Notices['homekit_hub_warnings']
+    assert '5D:1A:EB:A5:3C:3E' in hk.Notices['homekit_hub_warnings']
+
+
+def test_hub_warning_without_device_id_is_kept():
+    hk = _hk()
+    hk.Notices = _Notices()
+    hk._on_hub_warnings(
+        [{'level': 'warning', 'code': 'metadata_incomplete', 'message': 'hub-wide'}]
+    )
+    assert 'metadata_incomplete' in hk.Notices['homekit_hub_warnings']
+
+
+def test_hub_warning_republish_after_device_is_known():
+    hk = _hk()
+    hk.Notices = _Notices()
+    hk._on_hub_warnings(
+        [
+            {
+                'level': 'error',
+                'code': 'accessories_load_failed',
+                'message': 'failed',
+                'device_id': '5d:1a:eb:a5:3c:3e',
+            }
+        ]
+    )
+    assert 'homekit_hub_warnings' not in hk.Notices
+    hk._thermostat_by_device['5d:1a:eb:a5:3c:3e'] = object()
+    hk._publish_hub_warnings()
+    assert 'accessories_load_failed' in hk.Notices['homekit_hub_warnings']
+
+
 def test_maybe_update_profile_writes_custom_nls(tmp_path, monkeypatch):
     hk = _hk()
     hk.poly = SimpleNamespace(updateProfile=lambda: None)

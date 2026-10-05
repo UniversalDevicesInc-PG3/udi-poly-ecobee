@@ -22,7 +22,7 @@ Ecobee has **disabled UDI / Polyglot Cloud OAuth** for this integration. **New s
 4. **Main sensor** (`n00x_s`) — **Responding** (sensor inside thermostat)
 5. **Remote sensor** (`n00x_rs`) — **Responding** (dead battery or out-of-range if false)
 
-On **HomeKit** thermostats, connection semantics differ from cloud **Connected**; see **[CONFIG.md](CONFIG.md)** for controller **Ecobee Connection Status** and **HomeKit MQTT**. Hub Wi-Fi / transport metadata is informational only and does not raise unmapped-characteristic notices.
+On **HomeKit** thermostats, connection semantics differ from cloud **Connected**; see **[CONFIG.md](CONFIG.md)** for controller **Ecobee Connection Status** and **HomeKit MQTT**. Hub Wi-Fi, Siri, AirPlay, and media metadata is informational only and does not raise unmapped-characteristic notices. Hub warnings for pairings this Node Server did not import are ignored.
 
 **Celsius:** set Custom Param **`use_celsius`** to **`true`**. Temperature status, setpoint commands, and program **If** conditions then all use °C (not Celsius numbers with a °F symbol). See **[CONFIG.md](CONFIG.md#optional-settings)**.
 

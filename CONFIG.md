@@ -67,7 +67,7 @@ On the **Ecobee Controller** node (HomeKit mode):
 
 - **`homekit_hub_unreachable`** — cannot connect or hello failed; check hub is running and slug/host/port match.
 - **`homekit_hub_disconnected`** — session dropped while retrying (deduped in UI about every 45 seconds).
-- **`homekit_hub_warnings`** — structured warnings from the hub (see udi-poly-homekit-hub **PROTOCOL.md**).
+- **`homekit_hub_warnings`** — structured warnings from the hub for **this** Ecobee's devices only (see udi-poly-homekit-hub **PROTOCOL.md**). A pairing that is not an imported thermostat or sensor, such as another accessory's **`accessories_load_failed`**, is not shown here.
 - **`homekit_no_thermostat`** — hub sent devices but none became a thermostat node (includes JSON snapshot).
 
 ---
@@ -224,7 +224,7 @@ Extra comforts that have never been active on the stat may still need one activa
 - **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit-hub**.
 - Thermostats appear as **`t…`** nodes; remote sensors as **`rs…`**. **No weather / forecast nodes** on HomeKit.
 - **Realtime updates** from hub events; **Query** triggers a snapshot read. On hub connect / Node Server start, each thermostat also gets an automatic debounced snapshot to cache comfort setpoints for **Climate Type** commands.
-- Hub metadata characteristics are informational only (not copied to IoX drivers). That includes HAP **Current Transport**, **Wi-Fi Capabilities**, and **Wi-Fi Configuration Control**. Other unknown HAP chars may log **`homekit_unknown_chars`** notices.
+- Hub metadata characteristics are informational only (not copied to IoX drivers). That includes Wi-Fi/transport, Siri, AirPlay, media, and diagnostics. Other unknown HAP chars may log **`homekit_unknown_chars`** notices.
 - Temperature display follows **`use_celsius`** in Custom Params, not HAP Temperature Display Units. Status UOM and command editors stay aligned (Celsius = UOM 4 / °C). Changing **`use_celsius`** on an existing install republishes the C/F nodedef so program **If** and **Then** use the same scale.
 
 ### HomeKit thermostat node (drivers and commands)

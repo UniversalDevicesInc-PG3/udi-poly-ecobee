@@ -45,6 +45,10 @@ from homekit_client.char_map import (
         ('CurrentTransport', 1, CharBucket.INFORMATIONAL),
         ('WiFiCapabilities', 1, CharBucket.INFORMATIONAL),
         ('WiFiConfigurationControl', 1, CharBucket.INFORMATIONAL),
+        ('SIRI_ENABLE', 1, CharBucket.INFORMATIONAL),
+        ('AIRPLAY_ENABLE', 1, CharBucket.INFORMATIONAL),
+        ('ACTIVE', 1, CharBucket.INFORMATIONAL),
+        ('PING', 1, CharBucket.INFORMATIONAL),
     ],
 )
 def test_classify(name, aid, bucket):
@@ -102,6 +106,8 @@ def test_classify_informational_metadata_uuids():
     assert classify('0000022B-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('0000022C-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('0000022D-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
+    assert classify('00000271-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
+    assert classify('00000272-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('34AB8811-AC7F-4340-BAC3-FD6A85F9943B', 1) == CharBucket.INFORMATIONAL
 
 
