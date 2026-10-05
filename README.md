@@ -22,7 +22,9 @@ Ecobee has **disabled UDI / Polyglot Cloud OAuth** for this integration. **New s
 4. **Main sensor** (`n00x_s`) — **Responding** (sensor inside thermostat)
 5. **Remote sensor** (`n00x_rs`) — **Responding** (dead battery or out-of-range if false)
 
-On **HomeKit** thermostats, connection semantics differ from cloud **Connected**; see **[CONFIG.md](CONFIG.md)** for controller **Ecobee Connection Status** and **HomeKit MQTT**.
+On **HomeKit** thermostats, connection semantics differ from cloud **Connected**; see **[CONFIG.md](CONFIG.md)** for controller **Ecobee Connection Status** and **HomeKit MQTT**. Hub Wi-Fi / transport metadata is informational only and does not raise unmapped-characteristic notices.
+
+**Celsius:** set Custom Param **`use_celsius`** to **`true`**. Temperature status, setpoint commands, and program **If** conditions then all use °C (not Celsius numbers with a °F symbol). See **[CONFIG.md](CONFIG.md#optional-settings)**.
 
 ## HomeKit thermostat controls
 
@@ -88,3 +90,5 @@ Store releases typically appear within about an hour of publish.
 ## Advanced documentation
 
 HomeKit control details, hold behavior, limitations vs cloud, and full parameter tables: **[CONFIG.md](CONFIG.md)**
+
+Issue triage and deferred work: **[ISSUE_7_DEVICE_FILTERING.md](ISSUE_7_DEVICE_FILTERING.md)** — device filtering per PG3 instance (GitHub #7 closed; HomeKit scoped by hub pairing; cloud-only if cloud mode returns).

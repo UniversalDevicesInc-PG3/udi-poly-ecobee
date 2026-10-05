@@ -39,6 +39,12 @@ from homekit_client.char_map import (
         ('TemperatureDisplayUnits', 1, CharBucket.INFORMATIONAL),
         ('TEMPERATURE_UNITS', 1, CharBucket.INFORMATIONAL),
         ('Version', 1, CharBucket.INFORMATIONAL),
+        ('CURRENT_TRANSPORT', 1, CharBucket.INFORMATIONAL),
+        ('WI_FI_CAPABILITIES', 1, CharBucket.INFORMATIONAL),
+        ('WI_FI_CONFIGURATION_CONTROL', 1, CharBucket.INFORMATIONAL),
+        ('CurrentTransport', 1, CharBucket.INFORMATIONAL),
+        ('WiFiCapabilities', 1, CharBucket.INFORMATIONAL),
+        ('WiFiConfigurationControl', 1, CharBucket.INFORMATIONAL),
     ],
 )
 def test_classify(name, aid, bucket):
@@ -93,6 +99,9 @@ def test_classify_informational_metadata_uuids():
     assert classify('00000036-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('00000037-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('00000220-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
+    assert classify('0000022B-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
+    assert classify('0000022C-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
+    assert classify('0000022D-0000-1000-8000-0026BB765291', 1) == CharBucket.INFORMATIONAL
     assert classify('34AB8811-AC7F-4340-BAC3-FD6A85F9943B', 1) == CharBucket.INFORMATIONAL
 
 

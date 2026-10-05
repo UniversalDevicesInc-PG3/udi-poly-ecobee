@@ -7,6 +7,14 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Fixed
+
+- **Celsius display and programs:** after **`use_celsius=true`**, temperature status no longer keeps a leftover Fahrenheit UOM from PG3. Admin Console shows °C, and program **If** conditions use the same Celsius scale as **Heat Setpoint** / **Cool Setpoint** commands. Switching **`use_celsius`** republishes ``EcobeeHKC_*`` / ``EcobeeHKF_*`` (and sensor HC/HF) nodedefs and restores driver UOMs. Also corrects Celsius **Cool Setpoint** (was UOM 67) and **Mode** (was UOM 68) in ``driversMap``.
+
+### Changed
+
+- **HomeKit unmapped notices:** treat HAP **Current Transport**, **Wi-Fi Capabilities**, and **Wi-Fi Configuration Control** as informational metadata (no IoX drivers). They no longer appear in **`homekit_unknown_chars`** notices.
+
 ## [4.1.10] - 2026-06-23
 
 ### Added

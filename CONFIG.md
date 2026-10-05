@@ -74,7 +74,7 @@ On the **Ecobee Controller** node (HomeKit mode):
 
 ## Optional settings
 
-- **`use_celsius`**: `auto`, `true`, or `false`. Default `auto`.
+- **`use_celsius`**: `auto`, `true`, or `false`. Default `auto` (treated as Fahrenheit on HomeKit). Set **`true`** so IoX status, setpoint commands, and program **If** conditions all use °C. Saving the param updates existing thermostat/sensor nodedefs; reopen the Admin Console if the degree symbol looks stale.
 - **`dry_run`**: default **`false`**. Set **`true`** to log commands without sending them; Notice **`homekit_dry_run`** reminds you.
 - **`hk_mqtt_client_slug`**: default **`udi-poly-ecobee`**. Set a unique value only if multiple Ecobee NS instances share one broker.
 - **Custom Typed Params** (address overrides, [climate program labels](#climate-program-labels)): only needed for advanced installs — see [Reference: Typed params](#reference-custom-typed-configuration-parameters).
@@ -98,6 +98,10 @@ The Ecobee client retries hello until the hub is up. If it persists more than a 
 
 If this is a **new** HomeKit install but **`backend`** shows `cloud`, you may be upgrading a legacy NS. Set **`backend`** to **`homekit`** manually and **Save**, or remove and re-add the Node Server on a clean install. See seeding rules under [Ecobee quick start](#ecobee-quick-start-homekit).
 
+### Celsius numbers with a Fahrenheit symbol
+
+If **`use_celsius`** is **`true`** but IoX still shows °F (or program **If** wants Fahrenheit-scale values while **Heat Setpoint** commands use °C), restart the Node Server after this fix and reopen the Admin Console. The plugin now rewrites driver UOMs and switches ``EcobeeHKC_*`` / ``EcobeeHKF_*`` when you save **`use_celsius`**.
+
 ### Slug or broker mismatch
 
 **`hk_mqtt_hub_slug`** must exactly match the hub's **`mqtt_hub_slug`**. **`hk_mqtt_host`** / **`hk_mqtt_port`** must reach the same broker the hub uses.
@@ -120,7 +124,7 @@ Flat **Custom Params** (PG3). New installs: keys are seeded at startup so every 
 | `hk_mqtt_password` | No | Broker password when required. |
 | `hk_mqtt_hub_slug` | MQTT | Must match hub **`mqtt_hub_slug`**. Default `default`. Characters: `[A-Za-z0-9_-]`, length 1–128. |
 | `hk_mqtt_client_slug` | MQTT | Client topic segment. Default **`udi-poly-ecobee`**. Unique per NS instance if sharing a broker. |
-| `use_celsius` | No | `auto`, `true`, or `false`. Default `auto`. |
+| `use_celsius` | No | `auto`, `true`, or `false`. Default `auto` (HomeKit: Fahrenheit). **`true`** = Celsius nodedefs and driver UOM 4 for **Temperature**, **Heat Setpoint**, and **Cool Setpoint** (status and program **If** match command editors). |
 | `dry_run` | No | `true` / `false`. Default `false`. |
 | `hk_heat_cool_min_delta` | No | HomeKit **Auto** mode: minimum separation between **Heat Setpoint** and **Cool Setpoint** when co-writing HAP thresholds (matches Ecobee app **Compressor minimum delta**). Integer **1–10** in the stat's display units (°F or °C). Default **`3`**. Set to **`2`** when the Ecobee app allows a 2° minimum. Cloud mode ignores this (Ecobee API enforces limits on the stat). |
 | `api_key` | Cloud / PIN | Ecobee developer application key. See [Cloud backend](#cloud-backend-legacy). |
@@ -220,8 +224,8 @@ Extra comforts that have never been active on the stat may still need one activa
 - **No Ecobee OAuth or PIN** on the HomeKit path; pairing lives in **udi-poly-homekit-hub**.
 - Thermostats appear as **`t…`** nodes; remote sensors as **`rs…`**. **No weather / forecast nodes** on HomeKit.
 - **Realtime updates** from hub events; **Query** triggers a snapshot read. On hub connect / Node Server start, each thermostat also gets an automatic debounced snapshot to cache comfort setpoints for **Climate Type** commands.
-- Hub metadata characteristics are informational only (not copied to IoX drivers). Unknown HAP chars may log **`homekit_unknown_chars`** notices.
-- Temperature display follows **`use_celsius`** in Custom Params, not HAP Temperature Display Units.
+- Hub metadata characteristics are informational only (not copied to IoX drivers). That includes HAP **Current Transport**, **Wi-Fi Capabilities**, and **Wi-Fi Configuration Control**. Other unknown HAP chars may log **`homekit_unknown_chars`** notices.
+- Temperature display follows **`use_celsius`** in Custom Params, not HAP Temperature Display Units. Status UOM and command editors stay aligned (Celsius = UOM 4 / °C). Changing **`use_celsius`** on an existing install republishes the C/F nodedef so program **If** and **Then** use the same scale.
 
 ### HomeKit thermostat node (drivers and commands)
 

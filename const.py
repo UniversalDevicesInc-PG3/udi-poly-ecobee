@@ -90,8 +90,8 @@ driversMap = {
   'EcobeeC': [
     { 'driver': 'ST',     'value': 0,  'uom': '4', 'name': 'Temperature' },
     { 'driver': 'CLISPH', 'value': 0,  'uom': '4', 'name': 'Heat Setpoint'  },
-    { 'driver': 'CLISPC', 'value': 0,  'uom': '67', 'name': 'Cool Setpoint'  },
-    { 'driver': 'CLIMD',  'value': 0,  'uom': '68', 'name': 'Mode'  },
+    { 'driver': 'CLISPC', 'value': 0,  'uom': '4', 'name': 'Cool Setpoint'  },
+    { 'driver': 'CLIMD',  'value': 0,  'uom': '67', 'name': 'Mode'  },
     { 'driver': 'CLIFS',  'value': 0,  'uom': '68', 'name': 'Fan Mode'  },
     { 'driver': 'CLIHUM', 'value': 0,  'uom': '22', 'name': 'Humidity'  },
     { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
@@ -126,8 +126,8 @@ driversMap = {
   'EcobeeHKC': [
     { 'driver': 'ST',     'value': 0,  'uom': '4', 'name': 'Temperature' },
     { 'driver': 'CLISPH', 'value': 0,  'uom': '4', 'name': 'Heat Setpoint'  },
-    { 'driver': 'CLISPC', 'value': 0,  'uom': '67', 'name': 'Cool Setpoint'  },
-    { 'driver': 'CLIMD',  'value': 0,  'uom': '68', 'name': 'Mode'  },
+    { 'driver': 'CLISPC', 'value': 0,  'uom': '4', 'name': 'Cool Setpoint'  },
+    { 'driver': 'CLIMD',  'value': 0,  'uom': '67', 'name': 'Mode'  },
     { 'driver': 'CLIFS',  'value': 0,  'uom': '68', 'name': 'Fan Mode'  },
     { 'driver': 'CLIHUM', 'value': 0,  'uom': '22', 'name': 'Humidity'  },
     { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
@@ -168,8 +168,8 @@ driversMap = {
   'EcobeewAQC': [
     { 'driver': 'ST',     'value': 0,  'uom': '4', 'name': 'Temperature' },
     { 'driver': 'CLISPH', 'value': 0,  'uom': '4', 'name': 'Heat Setpoint'  },
-    { 'driver': 'CLISPC', 'value': 0,  'uom': '67', 'name': 'Cool Setpoint'  },
-    { 'driver': 'CLIMD',  'value': 0,  'uom': '68', 'name': 'Mode'  },
+    { 'driver': 'CLISPC', 'value': 0,  'uom': '4', 'name': 'Cool Setpoint'  },
+    { 'driver': 'CLIMD',  'value': 0,  'uom': '67', 'name': 'Mode'  },
     { 'driver': 'CLIFS',  'value': 0,  'uom': '68', 'name': 'Fan Mode'  },
     { 'driver': 'CLIHUM', 'value': 0,  'uom': '22', 'name': 'Humidity'  },
     { 'driver': 'CLIHCS', 'value': 0,  'uom': '25', 'name': 'Heat/Cool State'  },
@@ -252,3 +252,46 @@ driversMap = {
     { 'driver': 'ST', 'value': 0, 'uom': '17', 'name': 'Temperature' },
   ],
 }
+
+# IoX UOM: 4 = Celsius, 17 = Fahrenheit, 67 = thermostat mode.
+UOM_CELSIUS = '4'
+UOM_FAHRENHEIT = '17'
+UOM_TSTAT_MODE = '67'
+
+THERMOSTAT_TEMP_DRIVERS = frozenset({'ST', 'CLISPH', 'CLISPC'})
+
+
+def temperature_uom(use_celsius: bool) -> str:
+    """IoX temperature UOM for the current display units."""
+    return UOM_CELSIUS if use_celsius else UOM_FAHRENHEIT
+
+
+def restore_template_uoms(drivers, template) -> int:
+    """Force each driver UOM to match *template*. Returns how many rows changed.
+
+    PG3 ``Node._updateDrivers`` copies stored UOM from the database. After a
+    Fahrenheit→Celsius nodedef switch those rows can stay UOM 17 (F) while values
+    are written in Celsius — Admin Console shows °F and program IF uses F.
+    """
+    if not isinstance(drivers, list) or not isinstance(template, list):
+        return 0
+    want = {d.get('driver'): str(d.get('uom')) for d in template if d.get('driver')}
+    changed = 0
+    for d in drivers:
+        key = d.get('driver')
+        if not key or key not in want:
+            continue
+        if str(d.get('uom')) != want[key]:
+            d['uom'] = want[key]
+            changed += 1
+    return changed
+
+
+def driver_uom_from_list(drivers, driver: str):
+    """Return the UOM string for *driver* from a ``driversMap``-style list, or None."""
+    if not isinstance(drivers, list):
+        return None
+    for d in drivers:
+        if d.get('driver') == driver:
+            return d.get('uom')
+    return None

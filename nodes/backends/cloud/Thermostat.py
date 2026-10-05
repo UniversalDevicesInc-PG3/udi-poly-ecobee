@@ -6,7 +6,7 @@ import json
 from node_funcs import *
 from .Sensor import Sensor
 from .Weather import Weather
-from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driversMap,ecoMap
+from const import modeMap,equipmentStatusMap,windMap,transitionMap,fanMap,driversMap,ecoMap,restore_template_uoms
 
 
 """
@@ -30,10 +30,10 @@ class Thermostat(Node):
         self.settings = self.tstat['settings']
         self.useCelsius = useCelsius
         self.type = 'thermostat'
-        self.id = f'Ecobee{idSuffix}C' if self.useCelsius else f'Ecobee{idSuffix}F'
-        LOGGER.debug(f'id={self.id}')
-        self.drivers = deepcopy(driversMap[self.id])
-        self.id = '{}_{}'.format(self.id,thermostatId)
+        map_key = f'Ecobee{idSuffix}C' if self.useCelsius else f'Ecobee{idSuffix}F'
+        LOGGER.debug(f'id={map_key}')
+        self.drivers = deepcopy(driversMap[map_key])
+        self.id = '{}_{}'.format(map_key, thermostatId)
         self.revData = revData
         self.fullData = fullData
         # Will check wether we show weather later
@@ -45,6 +45,7 @@ class Thermostat(Node):
         # We track our driver values because we need the value before it's been pushed.
         self.driver = dict()
         super().__init__(controller.poly, primary, address, name)
+        restore_template_uoms(self.drivers, driversMap[map_key])
         controller.poly.subscribe(controller.poly.START,                  self.handler_start, address) 
 
     def handler_start(self):

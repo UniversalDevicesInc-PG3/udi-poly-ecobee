@@ -72,6 +72,10 @@ _INFORMATIONAL_NAME_FRAGMENTS: FrozenSet[str] = frozenset(
         'ACCESSORY_PROPERTIES',
         'TEMPERATURE_UNITS',
         'TEMPERATURE_DISPLAY_UNITS',
+        # HAP Wi-Fi / transport management (no IoX driver).
+        'CURRENT_TRANSPORT',
+        'WI_FI_CAPABILITIES',
+        'WI_FI_CONFIGURATION_CONTROL',
     }
 )
 
@@ -115,6 +119,9 @@ _UUID_INFORMATIONAL_NORMALIZED: FrozenSet[str] = frozenset(
             normalize_hap_uuid('00000037-0000-1000-8000-0026BB765291'),  # Version
             normalize_hap_uuid('000000A6-0000-1000-8000-0026BB765291'),  # Accessory Properties
             normalize_hap_uuid('00000220-0000-1000-8000-0026BB765291'),  # Product Data (HAP)
+            normalize_hap_uuid('0000022B-0000-1000-8000-0026BB765291'),  # Current Transport
+            normalize_hap_uuid('0000022C-0000-1000-8000-0026BB765291'),  # Wi-Fi Capabilities
+            normalize_hap_uuid('0000022D-0000-1000-8000-0026BB765291'),  # Wi-Fi Configuration Control
             # Vendor / bridge UUIDs seen on Ecobee via udi-poly-homekit-hub (not mapped to IoX).
             normalize_hap_uuid('34AB8811-AC7F-4340-BAC3-FD6A85F9943B'),
             normalize_hap_uuid('4A6AE4F6-036C-495D-87CC-B3702B437741'),

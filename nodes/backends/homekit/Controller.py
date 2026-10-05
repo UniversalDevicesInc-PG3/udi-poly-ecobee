@@ -130,6 +130,7 @@ class HomeKitBackend:
         self._hk_client_generation: int = 0
         self._hk_active_transport: Optional[str] = None
         self._hk_last_transport_snap: Optional[Dict[str, str]] = None
+        self._hk_last_use_celsius: Optional[bool] = None
         self._hk_last_disconnect_notice_monotonic: float = 0.0
         self._unknown_char_notice_lines: List[str] = []
         self._startup_refresh_timer: Optional[threading.Timer] = None
@@ -302,6 +303,15 @@ class HomeKitBackend:
             self._start_ws()
         else:
             self._hk_last_transport_snap = new_snap
+        new_c = self._use_celsius()
+        prev_c = self._hk_last_use_celsius
+        if self.ready and prev_c is not None and new_c != prev_c:
+            LOGGER.info(
+                'HomeKit use_celsius changed to %s; updating thermostat/sensor nodedefs and driver UOMs',
+                new_c,
+            )
+            self._apply_use_celsius_to_existing_nodes(new_c)
+        self._hk_last_use_celsius = new_c
 
     def sync_param_notices(self) -> None:
         """Refresh HomeKit notices that depend on flat params (e.g. dry_run)."""
@@ -817,6 +827,47 @@ class HomeKitBackend:
             return False
         return False
 
+    def _republish_if_units_changed(self, node: Any, use_c: bool) -> bool:
+        """Apply C/F nodedef + UOMs and re-add to IoX when they changed."""
+        apply = getattr(node, 'apply_display_units', None)
+        if not callable(apply):
+            return False
+        if not apply(use_c):
+            return False
+        try:
+            self.add_node(node)
+        except Exception:
+            LOGGER.exception(
+                'HomeKit: failed to republish %s after use_celsius change',
+                getattr(node, 'address', '?'),
+            )
+            return True
+        try:
+            node.reportDrivers()
+        except Exception:
+            LOGGER.debug(
+                'HomeKit reportDrivers after unit switch failed for %s',
+                getattr(node, 'address', '?'),
+                exc_info=True,
+            )
+        return True
+
+    def _apply_use_celsius_to_existing_nodes(self, use_c: bool) -> None:
+        for node in list(self._thermostat_by_device.values()):
+            if self._republish_if_units_changed(node, use_c):
+                try:
+                    self._schedule_thermostat_snapshot_refresh(node)
+                except Exception:
+                    LOGGER.debug(
+                        'HomeKit snapshot after use_celsius change failed for %s',
+                        getattr(node, 'address', '?'),
+                        exc_info=True,
+                    )
+        for node in list(self._sensor_by_key.values()):
+            self._republish_if_units_changed(node, use_c)
+        for node in list(self._motion_sensor_by_device.values()):
+            self._republish_if_units_changed(node, use_c)
+
     def _dry_run(self) -> bool:
         return str(self.dispatcher.effective_params.get('dry_run', 'false')).strip().lower() == 'true'
 
@@ -1186,6 +1237,9 @@ class HomeKitBackend:
                     self.add_node(node)
                     node = self.poly.getNode(addr)
                     created = True
+                elif isinstance(node, HomeKitThermostat):
+                    if self._republish_if_units_changed(node, use_c):
+                        created = True
                 if isinstance(node, HomeKitThermostat):
                     self._thermostat_by_device[did] = node
                 do_snapshot = (not skip_snapshot) or created
@@ -1371,7 +1425,18 @@ class HomeKitBackend:
         existing = self.poly.getNode(addr)
         if existing is not None and isinstance(existing, HomeKitSensor):
             self._sensor_by_key[key] = existing
-            if not register_only:
+            units_changed = existing.apply_display_units(use_c)
+            if not register_only and units_changed:
+                try:
+                    self.add_node(existing)
+                    existing.reportDrivers()
+                except Exception:
+                    LOGGER.debug(
+                        'HomeKit sensor %s republish after unit switch failed',
+                        addr,
+                        exc_info=True,
+                    )
+            elif not register_only:
                 self._retry_existing_sensor_addnode(existing, addr)
             return existing
         if existing is not None:
@@ -1442,7 +1507,18 @@ class HomeKitBackend:
         node_existing = self.poly.getNode(addr)
         if node_existing is not None and isinstance(node_existing, HomeKitSensor):
             self._motion_sensor_by_device[did] = node_existing
-            self._retry_existing_sensor_addnode(node_existing, addr)
+            if node_existing.apply_display_units(thermostat.use_celsius):
+                try:
+                    self.add_node(node_existing)
+                    node_existing.reportDrivers()
+                except Exception:
+                    LOGGER.debug(
+                        'HomeKit motion sensor %s republish after unit switch failed',
+                        addr,
+                        exc_info=True,
+                    )
+            else:
+                self._retry_existing_sensor_addnode(node_existing, addr)
             return node_existing
         if node_existing is not None:
             LOGGER.warning(

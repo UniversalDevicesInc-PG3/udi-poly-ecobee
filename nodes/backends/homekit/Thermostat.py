@@ -7,7 +7,7 @@ from typing import Any, TYPE_CHECKING
 
 from udi_interface import LOGGER, Node
 
-from const import driversMap
+from const import driver_uom_from_list, driversMap, restore_template_uoms
 from homekit_client import hap_apply
 from node_funcs import get_valid_node_name
 
@@ -53,10 +53,41 @@ class HomeKitThermostat(Node):
         nm = get_valid_node_name(name)
         super().__init__(controller.poly, primary, address, nm)
         self.name = nm
+        # PG3 may overlay stale F UOMs from the node DB after a unit switch.
+        restore_template_uoms(self.drivers, driversMap[base])
+
+    def _drivers_map_key(self) -> str:
+        return 'EcobeeHKC' if self.use_celsius else 'EcobeeHKF'
+
+    def apply_display_units(self, use_celsius: bool) -> bool:
+        """Switch ``EcobeeHKC_*`` / ``EcobeeHKF_*`` and restore template UOMs.
+
+        Returns True when nodedef or any driver UOM changed (caller should ``add_node``).
+        Driver values are kept; the next hub snapshot rewrites temperatures in the new units.
+        """
+        want = bool(use_celsius)
+        base = 'EcobeeHKC' if want else 'EcobeeHKF'
+        new_id = f'{base}_{self.thermostat_id}'
+        changed = bool(self.use_celsius) != want or self.id != new_id
+        self.use_celsius = want
+        if self.id != new_id:
+            old_vals = {d.get('driver'): d.get('value') for d in (self.drivers or [])}
+            self.id = new_id
+            merged = deepcopy(driversMap[base])
+            for d in merged:
+                key = d.get('driver')
+                if key in old_vals:
+                    d['value'] = old_vals[key]
+            self.drivers = merged
+            return True
+        return restore_template_uoms(self.drivers, driversMap[base]) > 0 or changed
 
     def set_driver_safe(self, driver: str, val: Any, report: bool = True) -> None:
+        uom = driver_uom_from_list(self.drivers, driver)
+        if uom is None:
+            uom = driver_uom_from_list(driversMap[self._drivers_map_key()], driver)
         try:
-            self.setDriver(driver, val, report=report, force=True)
+            self.setDriver(driver, val, report=report, force=True, uom=uom)
         except Exception:
             LOGGER.debug('setDriver %s=%r failed for %s', driver, val, self.address, exc_info=True)
 
