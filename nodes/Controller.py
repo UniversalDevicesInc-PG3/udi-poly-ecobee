@@ -91,6 +91,8 @@ class Controller(Node):
         self._backend_poly_start_applied = False
         self._pending_cfg_data: Any = None
         self._pending_config_done = False
+        # getAll can deliver nsdata on another thread before CUSTOMPARAMS.
+        self._pending_nsdata: Optional[tuple] = None
         super().__init__(poly, primary, address, name)
         self.name = name
         self._init_hk_typed_params()
@@ -240,6 +242,25 @@ class Controller(Node):
         except Exception:
             LOGGER.exception('customdata replay to backend failed')
 
+    def _deliver_nsdata(self, key, data) -> None:
+        if self.effective_params.get('backend', DEFAULT_EFFECTIVE['backend']) != 'cloud':
+            return
+        self._ensure_backend()
+        if self._backend and hasattr(self._backend, 'handler_nsdata'):
+            self._backend.handler_nsdata(key, data)
+
+    def _replay_nsdata_to_backend(self) -> None:
+        """Deliver nsdata that arrived before custom params selected the cloud backend."""
+        pending = self._pending_nsdata
+        self._pending_nsdata = None
+        if pending is None:
+            return
+        try:
+            key, data = pending
+            self._deliver_nsdata(key, data)
+        except Exception:
+            LOGGER.exception('nsdata replay to backend failed')
+
     def _flush_pending_config_to_backend(self) -> None:
         """Replay CONFIG / CONFIGDONE received before flat custom params were ready."""
         if not self._custom_params_loaded or self._backend is None:
@@ -260,8 +281,10 @@ class Controller(Node):
             return
         if self._backend_poly_start_applied:
             return
-        self._backend.handler_start()
+        # Set before the call. handler_start blocks on its startup wait, and the
+        # params thread would otherwise enter a second copy of that wait.
         self._backend_poly_start_applied = True
+        self._backend.handler_start()
 
     def _set_notice_html(self, key: str, body_html: str) -> None:
         self.Notices[key] = notice_html_with_timestamp(body_html)
@@ -344,6 +367,7 @@ class Controller(Node):
         if self._backend:
             self._backend.handler_params(params)
         self._replay_customdata_to_backend()
+        self._replay_nsdata_to_backend()
         if self._backend and hasattr(self._backend, 'sync_param_notices'):
             self._backend.sync_param_notices()
         self._apply_backend_poly_start()
@@ -364,12 +388,9 @@ class Controller(Node):
 
     def handler_custom_ns(self, key, data):
         if not self._custom_params_loaded:
+            self._pending_nsdata = (key, data)
             return
-        if self.effective_params.get('backend', DEFAULT_EFFECTIVE['backend']) != 'cloud':
-            return
-        self._ensure_backend()
-        if self._backend and hasattr(self._backend, 'handler_nsdata'):
-            self._backend.handler_nsdata(key, data)
+        self._deliver_nsdata(key, data)
 
     def handler_oauth(self, oauth):
         if not self._custom_params_loaded:

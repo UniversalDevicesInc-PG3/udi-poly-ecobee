@@ -48,6 +48,7 @@ class CloudBackend:
         self.hb = 0
         self.ready = False
         self.waiting_on_tokens = False
+        self._skip_refresh_until_long_poll = False
         self.use_oauth = False
         self.api_key = None
         self.api_key_param = None
@@ -105,6 +106,29 @@ class CloudBackend:
             LOGGER.debug('custom api_key read failed', exc_info=True)
             return ''
 
+    def _startup_handlers_pending(self) -> bool:
+        return (
+            self.handler_config_done_st is None
+            or self.handler_params_st is None
+            or self.handler_nsdata_st is None
+            or self.handler_data_st is None
+            or self.handler_config_st is None
+        )
+
+    def _give_up_on_startup_wait(self) -> bool:
+        """Timeout policy. True means startup should stop the node server.
+
+        A personal developer key replaces the store PIN key, so a missed nsdata
+        delivery must not block that install.
+        """
+        LOGGER.error("Timed out waiting for handlers to startup")
+        if self.handler_nsdata_st is None and self._custom_api_key():
+            LOGGER.warning(
+                'Store nsdata was not applied; continuing because Custom Param api_key is set'
+            )
+            self.handler_nsdata_st = False
+        return self._startup_handlers_pending()
+
     def handler_start(self):
         self.Notices.clear()
         LOGGER.info(f"Started Ecobee NodeServer {self.poly.serverdata['version']}")
@@ -115,15 +139,13 @@ class CloudBackend:
         # Wait for all handlers to finish
         #
         cnt = 10
-        while ((self.handler_config_done_st is None or self.handler_params_st is None
-             or self.handler_nsdata_st      is None or self.handler_data_st   is None)
-             or self.handler_config_st      is None and cnt > 0):
+        while cnt > 0 and self._startup_handlers_pending():
             LOGGER.warning(f'Waiting for all to be loaded config={self.handler_config_st} config_done={self.handler_config_done_st} params={self.handler_params_st} data={self.handler_data_st} nsdata={self.handler_nsdata_st}... cnt={cnt}')
             time.sleep(1)
             cnt -= 1
-        if cnt == 0:
-            LOGGER.error("Timed out waiting for handlers to startup")
+        if cnt == 0 and self._give_up_on_startup_wait():
             self.exit()
+            return
         #
         # Force to false, and successful communication will fix it
         self.set_ecobee_st(False)
@@ -216,6 +238,7 @@ class CloudBackend:
         if self.in_discover:
             LOGGER.debug("{}:longPoll: Skipping since discover is still running".format(self.address))
             return
+        self._skip_refresh_until_long_poll = False
         if self.discover_st is False:
             LOGGER.info("longPoll: Calling discover...")
             self.discover()
@@ -456,8 +479,18 @@ class CloudBackend:
         if 'access_token' in self.tokenData:
             exp_d = self._expire_delta()
             if exp_d is not False:
-                # We allow for 10 long polls to refresh the token...
-                if exp_d.total_seconds() < self.cfg_longPoll * 10:
+                if self._skip_refresh_until_long_poll:
+                    if exp_d.total_seconds() > 0:
+                        LOGGER.debug('Token refresh deferred until the next long poll')
+                        self.set_auth_st(True)
+                        return True
+                    LOGGER.error(
+                        'Token refresh deferred until the next long poll and the access token is expired'
+                    )
+                    self.set_auth_st(False)
+                    return False
+                # Refresh once the token is inside one long poll, capped at 5 minutes.
+                if exp_d.total_seconds() < self._refresh_lead_seconds():
                     LOGGER.info('Tokens {} expires {} will expire in {} seconds, so refreshing now...'.format(self.tokenData['refresh_token'],self.tokenData['expires'],exp_d.total_seconds()))
                     return self._getRefresh()
                 else:
@@ -495,7 +528,28 @@ class CloudBackend:
         self.refreshingTokens = False
         LOGGER.debug('exit')
 
+    def _refresh_lead_seconds(self) -> float:
+        """Seconds of remaining life at which a refresh is attempted.
+
+        One long-poll interval, and never more than five minutes. The old
+        ``longPoll * 10`` window refreshed for half an hour and Ecobee answered
+        HTTP 429.
+        """
+        try:
+            poll = int(getattr(self, 'cfg_longPoll', 300))
+        except (TypeError, ValueError):
+            poll = 300
+        if poll <= 0:
+            poll = 300
+        return float(min(poll, 300))
+
+    def _defer_token_refresh(self) -> None:
+        self._skip_refresh_until_long_poll = True
+
     def _getRefresh(self):
+        # Any path that does not obtain a new access token leaves this set so
+        # the next thermostat in the same poll does not POST /token again.
+        self._defer_token_refresh()
         if 'refresh_token' in self.tokenData:
             self.refreshingTokens = True
             LOGGER.info('Attempting to refresh tokens...')
@@ -554,6 +608,7 @@ class CloudBackend:
                     self._endRefresh()
                     return False
                 elif 'access_token' in res_data:
+                    self._skip_refresh_until_long_poll = False
                     self._endRefresh(res_data)
                     return True
         else:

@@ -7,6 +7,13 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.12] - 2026-11-06
+
+### Fixed
+
+- **Cloud startup after eisy-ui reinstall:** `nsdata` that arrives before custom params are loaded is kept and replayed to the cloud backend, and only one startup thread waits. The wait now stops after 10 seconds. If the only missing piece is store `nsdata` and a custom **`api_key`** is set, startup continues; otherwise the timeout stops the node server.
+- **Cloud token refresh:** refresh runs when the access token is inside one long poll (at most 5 minutes), not ten long polls. A non-200 from the token endpoint, including HTTP 429, skips further refresh attempts until the next long poll.
+
 ## [4.1.11] - 2026-10-05
 
 ### Fixed
