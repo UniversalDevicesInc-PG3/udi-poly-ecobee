@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.1.13] - 2026-11-07
+
+### Fixed
+
+- **Cloud token refresh on eisy-ui:** a successful refresh was saved to custom data but the in-memory token used for Ecobee requests stayed the old one. After the access token expired (about one hour), thermostat updates stopped and Ecobee returned HTTP 500. The refreshed token is now installed before the next request in the same poll.
+
 ## [4.1.12] - 2026-11-06
 
 ### Fixed

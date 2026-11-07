@@ -69,6 +69,54 @@ def test_check_tokens_refreshes_inside_lead_window():
     b._getRefresh.assert_called_once()
 
 
+def test_end_refresh_installs_token_used_by_api_calls():
+    b = _backend()
+    b.tokenData = {
+        'access_token': 'old',
+        'token_type': 'Bearer',
+        'refresh_token': 'r',
+        'expires': '2026-11-06T18:07:05',
+    }
+    new = {
+        'access_token': 'new',
+        'token_type': 'Bearer',
+        'refresh_token': 'r',
+        'expires_in': 3600,
+    }
+    b._endRefresh(new)
+    assert b.tokenData['access_token'] == 'new'
+    assert b.tokenData['expires']
+    assert b.token['access_token'] == 'new'
+    assert b.token is not b.tokenData
+    b.Data.__setitem__.assert_called_with('tokenData', new)
+
+
+def test_get_refresh_success_replaces_access_token():
+    b = _backend()
+    b.api_key = 'k'
+    b._skip_refresh_until_long_poll = True
+    b.tokenData = {
+        'refresh_token': 'r',
+        'access_token': 'old',
+        'token_type': 'Bearer',
+        'expires': _expires_in(-60),
+    }
+    b.session = MagicMock()
+    b.session.post.return_value = {
+        'code': 200,
+        'data': {
+            'access_token': 'new',
+            'token_type': 'Bearer',
+            'refresh_token': 'r2',
+            'expires_in': 3600,
+        },
+    }
+    assert b._getRefresh() is True
+    assert b.tokenData['access_token'] == 'new'
+    assert b.tokenData['token_type'] == 'Bearer'
+    assert b._skip_refresh_until_long_poll is False
+
+
 def test_get_refresh_defers_further_attempts_on_429():
     b = _backend()
     b.api_key = 'k'

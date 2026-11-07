@@ -14,6 +14,8 @@ For **HomeKit hub mode** (recommended): install and pair on **[udi-poly-homekit-
 
 Ecobee has **disabled UDI / Polyglot Cloud OAuth** for this integration. **New setups should use HomeKit hub mode.** Cloud mode only remains possible with a **personal Ecobee developer API key** you registered before shared keys stopped working — see **[CONFIG.md — Cloud backend (legacy)](CONFIG.md#cloud-backend-legacy)**.
 
+The access token lasts about an hour. After it refreshes, thermostat updates continue with the new token, including on eisy-ui.
+
 ## Node info
 
 1. **Controller** — **NodeServer Online** (process status)

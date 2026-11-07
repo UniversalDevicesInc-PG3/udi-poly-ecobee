@@ -261,7 +261,7 @@ Use only if you have a **working personal Ecobee developer API key** (not UDI / 
 2. On first start you receive a PIN.
 3. Log in at the Ecobee web site → Profile → **My Apps** → **Add Application** → enter the PIN.
 4. Wait for approval (checked every 60 seconds; do not restart during this step).
-5. Thermostats, sensors, weather, and forecast nodes are added via the Ecobee API (refreshes about every 3 minutes).
+5. Thermostats, sensors, weather, and forecast nodes are added via the Ecobee API (refreshes about every 3 minutes). The access token lasts about an hour; the plugin refreshes it and keeps updating those nodes with the new token. A restart is not required for that refresh.
 
 **Climate Type** **(cloud):** **Status** and **commands** use per-thermostat comfort lists from the Ecobee API. The command editor (**CT_***) shows only comforts configured on that stat, with labels from [Climate program labels](#climate-program-labels) when set. See [Effect on Climate Type](#effect-on-climate-type-cloud-vs-homekit) for details.
 

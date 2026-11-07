@@ -520,6 +520,11 @@ class CloudBackend:
             if 'expires_in' in refresh_data:
                 ts = time.time() + refresh_data['expires_in']
                 refresh_data['expires'] = datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%S")
+            # _checkTokens and the Ecobee requests read tokenData. Saving
+            # custom data does not update that object: eisy-ui acks the save
+            # and does not echo it back, so the next call kept the expired
+            # access token. Install it before the save.
+            self.tokenData = refresh_data
             self.token = deepcopy(refresh_data)
             self.set_auth_st(True)
             self.Notices.clear()
