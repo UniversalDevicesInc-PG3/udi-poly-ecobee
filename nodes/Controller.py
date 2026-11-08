@@ -93,6 +93,10 @@ class Controller(Node):
         self._pending_config_done = False
         # getAll can deliver nsdata on another thread before CUSTOMPARAMS.
         self._pending_nsdata: Optional[tuple] = None
+        # Same race for custom typed data. Dropping it leaves TypedData empty, and the
+        # next climate sync then saves rows without learned heat/cool.
+        self._pending_typed_data: Any = None
+        self._typed_data_loaded = False
         super().__init__(poly, primary, address, name)
         self.name = name
         self._init_hk_typed_params()
@@ -368,6 +372,7 @@ class Controller(Node):
             self._backend.handler_params(params)
         self._replay_customdata_to_backend()
         self._replay_nsdata_to_backend()
+        self._replay_typed_data_to_backend()
         if self._backend and hasattr(self._backend, 'sync_param_notices'):
             self._backend.sync_param_notices()
         self._apply_backend_poly_start()
@@ -434,9 +439,34 @@ class Controller(Node):
         if self._backend and hasattr(self._backend, 'handler_typed_params'):
             self._backend.handler_typed_params(data)
 
+    def _load_typed_data_early(self, data) -> None:
+        """Keep custom typed data that arrives before custom params select a backend."""
+        if data is None:
+            return
+        try:
+            self.TypedData.load(data)
+            self._typed_data_loaded = True
+        except Exception:
+            LOGGER.exception('Early custom typed data load failed')
+
+    def _replay_typed_data_to_backend(self) -> None:
+        pending = self._pending_typed_data
+        self._pending_typed_data = None
+        if pending is None or self._backend is None:
+            return
+        if hasattr(self._backend, 'handler_typed_data'):
+            try:
+                self._backend.handler_typed_data(pending)
+            except Exception:
+                LOGGER.exception('custom typed data replay to backend failed')
+
     def handler_typed_data(self, data):
         if not self._custom_params_loaded:
+            self._pending_typed_data = data
+            self._load_typed_data_early(data)
             return
+        if data is not None:
+            self._typed_data_loaded = True
         self._ensure_backend()
         if self._backend and hasattr(self._backend, 'handler_typed_data'):
             self._backend.handler_typed_data(data)

@@ -167,3 +167,31 @@ def test_nsdata_before_params_is_replayed_to_cloud():
     c._replay_nsdata_to_backend()
     backend.handler_nsdata.assert_called_once_with('nsdata', {'api_key_pin': 'pin'})
     assert c._pending_nsdata is None
+
+
+def test_typed_data_before_params_is_kept_and_replayed():
+    from nodes.Controller import Controller as Dispatcher
+
+    c = Dispatcher.__new__(Dispatcher)
+    c._custom_params_loaded = False
+    c._pending_typed_data = None
+    c._typed_data_loaded = False
+    c.TypedData = MagicMock()
+    payload = {
+        'climate_programs': [
+            {
+                'thermostat_id': '411956665463',
+                'climates': [{'climateRef': 'away', 'name': 'Away', 'heat': '68.0', 'cool': '76.0'}],
+            }
+        ]
+    }
+    c.handler_typed_data(payload)
+    assert c._pending_typed_data == payload
+    assert c._typed_data_loaded is True
+    c.TypedData.load.assert_called_once_with(payload)
+
+    backend = MagicMock()
+    c._backend = backend
+    c._replay_typed_data_to_backend()
+    backend.handler_typed_data.assert_called_once_with(payload)
+    assert c._pending_typed_data is None

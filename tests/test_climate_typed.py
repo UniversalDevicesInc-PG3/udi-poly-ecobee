@@ -30,6 +30,8 @@ def test_ensure_climate_typed_data_creates_thermostat_row():
     assert rows[0]['thermostat_id'] == '9243'
     assert rows[0]['name'] == 'Downstairs'
     assert len(rows[0]['climates']) >= 4
+    refs = [c['climateRef'] for c in rows[0]['climates']]
+    assert refs.index('home') < refs.index('away')
 
 
 def test_ensure_merges_api_names_without_overwriting_custom():
@@ -51,6 +53,7 @@ def test_ensure_merges_api_names_without_overwriting_custom():
                 'name': 'Downstairs',
                 'api_climates': [
                     {'ref': 'home', 'name': 'API Home'},
+                    {'ref': 'away', 'name': 'Not Here'},
                     {'ref': 'smart2', 'name': 'Workshop'},
                 ],
             }
@@ -58,6 +61,8 @@ def test_ensure_merges_api_names_without_overwriting_custom():
     )
     home = next(c for c in rows[0]['climates'] if c['climateRef'] == 'home')
     assert home['name'] == 'My Home'
+    away = next(c for c in rows[0]['climates'] if c['climateRef'] == 'away')
+    assert away['name'] == 'Away'
     smart2 = next(c for c in rows[0]['climates'] if c['climateRef'] == 'smart2')
     assert smart2['name'] == 'Workshop'
 
@@ -74,6 +79,14 @@ def test_profile_climates_for_thermostat_uses_nested_names():
     profile = profile_climates_for_thermostat(typed, '9243', climate_catalog=climateList[:8])
     assert profile[climateMap['smart2']]['name'] == 'Movie Night'
     assert profile[climateMap['away']]['name'] == 'Away'
+    kept = profile_climates_for_thermostat(
+        typed,
+        '9243',
+        climate_catalog=climateList,
+        stored_climates={'9243': [{'ref': 'vacation', 'name': 'Trip'}]},
+    )
+    assert kept[climateMap['vacation']]['name'] == 'Trip'
+    assert kept[climateMap['smart2']]['name'] == 'Movie Night'
 
 
 def test_sync_climate_typed_store_persists_when_changed():

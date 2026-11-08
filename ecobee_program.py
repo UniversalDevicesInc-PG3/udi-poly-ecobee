@@ -89,8 +89,8 @@ def comfort_setpoints_from_typed_rows(
     """
     Optional hub-learned ``heat`` / ``cool`` per comfort from **Climate program labels** typed data.
 
-    HomeKit fills these fields automatically when the stat is on that comfort during QUERY or
-    at Node Server start; they are not meant for manual entry.
+    The user can type extra comforts. HomeKit may fill a blank extra once and
+    does not replace it. Home, Away, and Sleep are updated from the hub.
     """
     from climate_typed import find_thermostat_typed_row
 

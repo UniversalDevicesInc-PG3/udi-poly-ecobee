@@ -43,6 +43,10 @@ class HomeKitThermostat(Node):
         # Set True after HAP ``CurrentHeatingCoolingState`` value 3 is seen (extended 4-value encoding).
         self._hap_cur_hc_four_value = False
         self._hk_last_comfort_byte: int | None = None
+        # Set when Climate Type or a setpoint event should be followed by one hub read.
+        # The read's mode and both setpoints are saved together when it returns.
+        self._hk_save_comfort_from_query = False
+        self._hk_in_comfort_query = False
         self._hk_sp_sig_to_gv3: dict[tuple[float, float], int] = {}
         self._hk_gv3_to_sp: dict[int, tuple[float, float]] = {}
         self._hk_vendor_comfort_sp: dict[str, tuple[float, float]] = {}
@@ -123,19 +127,59 @@ class HomeKitThermostat(Node):
 
     def hk_comfort_gv3_resolver(self, hub_byte: int) -> int:
         """Resolve IoX ``GV3`` from Ecobee HAP comfort byte (uses setpoints for Temp / byte 3)."""
-        self._hk_last_comfort_byte = int(hub_byte)
+        prev = self._hk_last_comfort_byte
+        byte = int(hub_byte)
+        self._hk_last_comfort_byte = byte
+        saved = dict(self._hk_sp_sig_to_gv3)
         gv3 = self._resolve_hk_comfort_gv3()
-        if int(hub_byte) == hap_apply.ECOBEE_HK_COMFORT_TEMP:
+        # Mode is not ordered ahead of the thresholds, and a threshold that did not
+        # change is omitted. Do not store the pair on hand. A query returns the mode
+        # and both setpoints together; that result is what gets saved.
+        if getattr(self, '_hk_in_comfort_query', False):
+            self._hk_sp_sig_to_gv3 = saved
+            return gv3
+        if byte == hap_apply.ECOBEE_HK_COMFORT_TEMP and prev != byte:
+            self._hk_sp_sig_to_gv3 = saved
+            self._hk_save_comfort_from_query = True
+            request = getattr(self.hk, 'request_comfort_setpoint_query', None) if self.hk else None
+            if callable(request):
+                request(self)
+            return gv3
+        if byte != hap_apply.ECOBEE_HK_COMFORT_TEMP:
+            return gv3
+        if byte == hap_apply.ECOBEE_HK_COMFORT_TEMP and not self._hk_save_comfort_from_query:
             self._remember_hk_comfort_signature(gv3)
         return gv3
 
     def refresh_gv3_after_hk_setpoint(self) -> None:
+        if self._hk_save_comfort_from_query or getattr(self, '_hk_in_comfort_query', False):
+            return
         if getattr(self, '_hk_last_comfort_byte', None) != hap_apply.ECOBEE_HK_COMFORT_TEMP:
             return
         gv3 = self._resolve_hk_comfort_gv3()
         self.set_driver_safe('GV3', gv3)
 
+    def _bind_saved_extra_comfort_signatures(self) -> None:
+        """A stored heat/cool pair keeps that comfort. A different pair uses the next blank one."""
+        from node_funcs import climateMap
+
+        if not hasattr(self, '_hk_sp_sig_to_gv3'):
+            self._hk_sp_sig_to_gv3 = {}
+        occupied = {int(gv) for gv in self._hk_sp_sig_to_gv3.values()}
+        for ref, sp in self._program_comfort_sp().items():
+            if ref in ('home', 'away', 'sleep'):
+                continue
+            if ref not in climateMap:
+                continue
+            gv = int(climateMap[ref])
+            if gv in occupied:
+                continue
+            sig = hap_apply.comfort_setpoint_key(sp[0], sp[1])
+            self._hk_sp_sig_to_gv3[sig] = gv
+            occupied.add(gv)
+
     def _resolve_hk_comfort_gv3(self) -> int:
+        self._bind_saved_extra_comfort_signatures()
         heat = cool = None
         try:
             heat = float(self.getDriver('CLISPH'))
@@ -167,9 +211,16 @@ class HomeKitThermostat(Node):
             self._hk_sp_sig_to_gv3 = {}
         if not hasattr(self, '_hk_gv3_to_sp'):
             self._hk_gv3_to_sp = {}
-        self._hk_sp_sig_to_gv3[hap_apply.comfort_setpoint_key(heat, cool)] = int(gv3)
-        self._hk_gv3_to_sp[int(gv3)] = (float(heat), float(cool))
+        sig = hap_apply.comfort_setpoint_key(heat, cool)
         ref = hap_apply.gv3_to_comfort_ref(int(gv3), self._configured_climate_refs())
+        saved = self._program_comfort_sp().get(ref) if ref else None
+        if saved is not None:
+            return
+        for old_sig, old_gv in list(self._hk_sp_sig_to_gv3.items()):
+            if int(old_gv) == int(gv3) and old_sig != sig:
+                del self._hk_sp_sig_to_gv3[old_sig]
+        self._hk_sp_sig_to_gv3[sig] = int(gv3)
+        self._hk_gv3_to_sp[int(gv3)] = (float(heat), float(cool))
         if ref and self.hk:
             self.hk.persist_comfort_setpoint(
                 self.thermostat_id,
@@ -192,6 +243,14 @@ class HomeKitThermostat(Node):
         if heat is None or cool is None:
             return
         self._hk_vendor_comfort_sp[r] = (float(heat), float(cool))
+        if r in ('home', 'away', 'sleep') and self.hk:
+            self.hk.persist_comfort_setpoint(
+                self.thermostat_id,
+                r,
+                float(heat),
+                float(cool),
+                device_id=self.device_id_hub,
+            )
 
     def _program_comfort_sp(self) -> dict[str, tuple[float, float]]:
         if self.hk:
@@ -209,9 +268,45 @@ class HomeKitThermostat(Node):
             vendor_sp=self._hk_vendor_comfort_sp,
             climate_map=climateMap,
         )
-        if getattr(self, '_hk_last_comfort_byte', None) == hap_apply.ECOBEE_HK_COMFORT_TEMP:
+        byte = getattr(self, '_hk_last_comfort_byte', None)
+        if byte is None or not self.hk:
+            return
+        if int(byte) == hap_apply.ECOBEE_HK_COMFORT_TEMP:
             gv3 = self._resolve_hk_comfort_gv3()
+            ref = hap_apply.gv3_to_comfort_ref(int(gv3), self._configured_climate_refs())
+            saved = self._program_comfort_sp().get(ref) if ref else None
+            try:
+                heat = float(self.getDriver('CLISPH'))
+                cool = float(self.getDriver('CLISPC'))
+                sig = hap_apply.comfort_setpoint_key(heat, cool)
+            except (TypeError, ValueError):
+                return
+            if saved is not None and hap_apply.comfort_setpoint_key(*saved) != sig:
+                return
+            if saved is not None:
+                self.set_driver_safe('GV3', gv3)
+                return
             self._remember_hk_comfort_signature(gv3)
+            self.set_driver_safe('GV3', gv3)
+            return
+        gv3 = hap_apply.ecobee_hk_comfort_to_gv3(int(byte))
+        ref = hap_apply.gv3_to_comfort_ref(int(gv3), self._configured_climate_refs())
+        if not ref:
+            return
+        try:
+            heat = float(self.getDriver('CLISPH'))
+            cool = float(self.getDriver('CLISPC'))
+        except (TypeError, ValueError):
+            return
+        self._hk_vendor_comfort_sp[ref] = (heat, cool)
+        self._hk_gv3_to_sp[int(gv3)] = (heat, cool)
+        self.hk.persist_comfort_setpoint(
+            self.thermostat_id,
+            ref,
+            heat,
+            cool,
+            device_id=self.device_id_hub,
+        )
 
     def _comfort_setpoints_for_gv3_command(self, gv3: int) -> tuple[float, float] | None:
         return hap_apply.resolve_gv3_comfort_setpoints(

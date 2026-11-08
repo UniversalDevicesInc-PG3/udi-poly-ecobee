@@ -82,7 +82,7 @@ def test_homekit_climate_details_skips_indices_when_requested():
         skip_catalog_indices={0, 1, 2, 3},
     )
     assert d[climateMap['home']]['name'] != 'HubSlot1'
-    assert d[climateMap['home']]['name'] == (climateList[1][0].upper() + climateList[1][1:] if climateList[1] else '1')
+    assert d[climateMap['home']]['name'] == 'Home'
 
 
 def test_profile_needs_update_version_change():
@@ -137,6 +137,7 @@ def test_write_ecobee_climate_profile_writes_custom_xml(mini_plugin: Path):
     assert 'I_HK_TSTAT_FAN_MODE' not in ed
     assert 'I_TSTAT_FAN_MODE' in text
     nls = (mini_plugin / 'profile' / 'nls' / 'en_us.txt').read_text(encoding='utf-8')
-    assert 'CT_9243-0 = Away' in nls
+    assert 'CT_9243-0 = Home' in nls
+    assert 'CT_9243-1 = Away' in nls
     assert 'CT_9243-4 = Movie Night' in nls
     assert 'HK_TSTAT_FAN' not in nls

@@ -7,6 +7,20 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-08
+
+### Fixed
+
+- **HomeKit Climate Type learning:** a **Climate Type** or heat/cool event requests one hub read of **Climate Type**, **Heat Setpoint**, and **Cool Setpoint**. **Climate Type** is not assumed to arrive first, and a setpoint that did not change is still in the read. **Home**, **Away**, and **Sleep** are updated from that read. An extra comfort is filled only when that row has no **Heat setpoint** and **Cool setpoint**.
+- **HomeKit learned comfort setpoints:** a restart no longer clears **Heat setpoint** and **Cool setpoint** on **Climate program labels**. Typed data that arrives before custom params is kept. If those fields were already cleared, the next start copies them back from the saved comfort setpoints.
+- **Comfort display names:** a name already saved on a comfort row is not replaced by a hub update, a discover, or a restart. A comfort that is not on the row keeps the label already saved for **Climate Type**.
+- **Comfort setpoints:** **Home**, **Away**, and **Sleep** **Heat setpoint** and **Cool setpoint** follow the hub read, because those comforts are named. An extra comfort keeps values already on the row, including values you type. A new pair can fill one extra comfort that is still blank, such as **Smart2** when **Smart1** already has values.
+- **Comfort order:** **Home** is now first and **Away** is second. **Climate Type** index **0** is **Home** and index **1** is **Away**. Check any program that sets **Climate Type** to **Home** or **Away**, and any program that tests those values. The old indexes were **Away** **0** and **Home** **1**.
+
+### Changed
+
+- **Profile (IoX nodedef):** version **4.2.0** — **Climate Type** index **0** is **Home** and index **1** is **Away**. Restart the Node Server after upgrade so IoX reloads the profile.
+
 ## [4.1.13] - 2026-11-07
 
 ### Fixed

@@ -10,8 +10,8 @@ TYPED_CLIMATE_PROGRAMS = 'climate_programs'
 
 # Comfort refs usually present on Ecobee stats (used when API rows are unavailable).
 _DEFAULT_SEED_REFS = (
-    'away',
     'home',
+    'away',
     'sleep',
     'smart1',
     'smart2',
@@ -56,6 +56,19 @@ def default_climate_label(ref: str) -> str:
     if not r:
         return ''
     return r[0].upper() + r[1:] if len(r) > 1 else r.upper()
+
+
+def _climate_ref_sequence(rows: object) -> List[str]:
+    """Comfort refs in list order. Used to persist a catalog reorder."""
+    if not isinstance(rows, list):
+        return []
+    out: List[str] = []
+    for row in rows:
+        if isinstance(row, dict):
+            ref = _climate_ref_from_row(row)
+            if ref:
+                out.append(ref)
+    return out
 
 
 def _climate_ref_from_row(row: Mapping[str, object]) -> str:
@@ -130,13 +143,6 @@ def find_thermostat_typed_row(
     return None
 
 
-def _climate_name_is_default(ref: str, name: str) -> bool:
-    n = str(name or '').strip()
-    if not n:
-        return True
-    return n == default_climate_label(ref)
-
-
 def _merge_climate_list(
     existing: Optional[List[Dict[str, str]]],
     *,
@@ -157,15 +163,11 @@ def _merge_climate_list(
 
     seed_refs = list(api.keys()) if api else [r for r in _DEFAULT_SEED_REFS if r in climateMap]
     for ref in seed_refs:
-        api_name = api.get(ref, '')
-        if ref not in by_ref:
-            by_ref[ref] = {'climateRef': ref, 'name': api_name or default_climate_label(ref)}
-            changed = True
+        if ref in by_ref:
             continue
-        cur = by_ref[ref]['name']
-        if api_name and _climate_name_is_default(ref, cur) and cur != api_name:
-            by_ref[ref]['name'] = api_name
-            changed = True
+        api_name = api.get(ref, '')
+        by_ref[ref] = {'climateRef': ref, 'name': api_name or default_climate_label(ref)}
+        changed = True
 
     # Stable order: catalog order first, then any extra API refs.
     ordered: List[Dict[str, str]] = []
@@ -244,7 +246,7 @@ def ensure_climate_typed_data(
             api_climates=api_climates,
             climate_catalog=climate_catalog,
         )
-        if c_changed:
+        if c_changed or _climate_ref_sequence(row.get('climates')) != _climate_ref_sequence(climates):
             row['climates'] = climates
             changed = True
         elif row.get('climates') != climates:
@@ -257,6 +259,27 @@ def ensure_climate_typed_data(
     return out, changed
 
 
+def _stored_climate_name_map(
+    stored_climates: Optional[Mapping[str, Any]],
+    thermostat_id: str,
+) -> Dict[str, str]:
+    """``customData.climates`` ref → name for one thermostat."""
+    if not isinstance(stored_climates, Mapping):
+        return {}
+    block = stored_climates.get(str(thermostat_id))
+    if not isinstance(block, list):
+        return {}
+    out: Dict[str, str] = {}
+    for item in block:
+        if not isinstance(item, dict):
+            continue
+        ref = _climate_ref_from_row(item)
+        name = str(item.get('name', '') or '').strip()
+        if ref and name:
+            out[ref] = name
+    return out
+
+
 def profile_climates_for_thermostat(
     typed_rows: Optional[Iterable[Mapping[str, object]]],
     thermostat_id: str,
@@ -264,11 +287,13 @@ def profile_climates_for_thermostat(
     device_id: Optional[str] = None,
     api_climates: Optional[Iterable[Mapping[str, object]]] = None,
     climate_catalog: Sequence[str] = DEFAULT_CLIMATE_CATALOG,
+    stored_climates: Optional[Mapping[str, Any]] = None,
 ) -> List[Dict[str, str]]:
     """
-  Build profile writer input for one thermostat: full ``climate_catalog`` with per-ref names.
+    Build profile writer input for one thermostat: full ``climate_catalog`` with per-ref names.
 
-    Priority: typed nested name → API name → default label.
+    Priority: typed nested name → API name → previously saved label → default label.
+    A name already on the typed row is used as-is, including the catalog default.
     """
     rows = _typed_climate_program_rows(typed_rows)
     row = find_thermostat_typed_row(rows, thermostat_id=thermostat_id, device_id=device_id)
@@ -284,10 +309,16 @@ def profile_climates_for_thermostat(
             if name:
                 typed_by_ref[ref] = name
     api_by_ref = _api_climate_map(api_climates)
+    stored_by_ref = _stored_climate_name_map(stored_climates, thermostat_id)
 
     out: List[Dict[str, str]] = []
     for ref in climate_catalog:
-        name = typed_by_ref.get(ref) or api_by_ref.get(ref) or default_climate_label(ref)
+        name = (
+            typed_by_ref.get(ref)
+            or api_by_ref.get(ref)
+            or stored_by_ref.get(ref)
+            or default_climate_label(ref)
+        )
         out.append({'ref': ref, 'name': name})
     return out
 

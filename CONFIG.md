@@ -162,6 +162,7 @@ Each nested **climates** row:
 | ----- | ------- |
 | `climateRef` | Ecobee program ref (e.g. `home`, `away`, `sleep`, `smart2`) |
 | `name` | Label shown in IoX for that comfort |
+| `heat` / `cool` | **Heat setpoint** / **Cool setpoint** for that comfort. **Home**, **Away**, and **Sleep** are updated from the hub whenever that comfort is read. For every other comfort, type the values yourself, or leave the row blank and the plugin fills it once. Those values are never replaced. See [How learning works](#how-learning-works). |
 
 Example (cloud stat with custom Smart comforts):
 
@@ -183,8 +184,8 @@ Example (cloud stat with custom Smart comforts):
 
 You usually do **not** need to create rows manually:
 
-- **Cloud:** rows are created or updated on **DISCOVER**. Names are filled from `program.climates` in the Ecobee API when still empty or at plugin defaults. **User-edited names are preserved** on later syncs.
-- **HomeKit:** rows are created when the hub device list is processed. Names start from the default catalog until you edit them here.
+- **Cloud:** rows are created or updated on **DISCOVER**. A new comfort takes its name from `program.climates` in the Ecobee API. A name already on the row is left as it is.
+- **HomeKit:** rows are created when the hub device list is processed. Names start from the default catalog until you edit them here. A later hub update does not change a name you already have, including **Home**, **Away**, and **Smart1**.
 
 After you change labels in Custom Typed Data, the plugin refreshes the IoX profile so **Climate Type** pick lists pick up the new text (cloud immediately on save; HomeKit on the next hub device list / profile write).
 
@@ -198,22 +199,32 @@ After you change labels in Custom Typed Data, the plugin refreshes the IoX profi
 **HomeKit backend**
 
 - **Climate Type** **status** uses the full comfort label range (**CTA_***) so current comfort and all configured names can display correctly. When Ecobee reports HAP byte **3** (Temp) for comforts beyond Home / Sleep / Away (e.g. **Vacation** and **Away Extended**), status resolves **Climate Type** from **Heat Setpoint** / **Cool Setpoint** signatures against the thermostat’s configured comfort list (not always **Smart1**).
-- **Climate Type** **commands** use the four HomeKit hold slots (**CT_HK_***) indices **0–3** (Away / Home / Sleep / Temp). For comforts that need explicit setpoints (Temp slot, Vacation, Away Extended, etc.), the plugin writes heat/cool thresholds before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
+- **Climate Type** **commands** use the four HomeKit hold slots (**CT_HK_***) indices **0–3** (Home / Away / Sleep / Temp). For comforts that need explicit setpoints (Temp slot, Vacation, Away Extended, etc.), the plugin writes heat/cool thresholds before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
 
 ### HomeKit Climate Type — commands and setpoints
 
-Ecobee HomeKit exposes only **four** hold bytes on the wire (Home, Sleep, Away, Temp). IoX can still **command** extra comforts when their setpoints are known:
+Ecobee HomeKit exposes only **four** hold choices on the wire: **Home**, **Sleep**, **Away**, and **Temp**. **Home**, **Away**, and **Sleep** tell the thermostat to use the comfort it already has programmed. Every other **Climate Type** (**Smart1** through **Smart7**, **Vacation**, **Away Extended**, and the rest) is sent as **Temp**, and the plugin has to write that comfort’s **Heat Setpoint** and **Cool Setpoint** first. HomeKit does not publish those temperatures until the thermostat is actually running that comfort.
 
-| Source | What is cached |
+#### How learning works
+
+1. On Node Server start, hub connect, and **Query**, the plugin reads the thermostat. **Home**, **Away**, and **Sleep** are named by that read, so **Heat setpoint** and **Cool setpoint** on those rows are updated every time, including when the row already has values. Their **Climate Type** commands use the hold only. Ecobee applies the temperatures stored in the comfort; the plugin does not send setpoints.
+2. **Smart1** and the other extra comforts are not named by HomeKit. They all share the **Temp** hold. Those rows stay blank until you type **Heat setpoint** and **Cool setpoint**, or until a blank row is filled once as described below. Values already on an extra comfort are never replaced.
+3. Choosing **Climate Type** **Smart1** (or **Smart2**, **Vacation**, and so on) before those two numbers exist does not change the thermostat. The plugin does not send the command. **Climate Type** stays on the comfort the thermostat is already using, and the next status update shows that comfort again.
+4. HomeKit does not promise that **Climate Type** arrives before the new temperatures, and a temperature that did not change is not sent at all. On this hub, comfort changes showed up as **Heat Setpoint** / **Cool Setpoint** events and **Climate Type** was not in the event stream. When either a **Climate Type** change or one of those setpoint events arrives, the plugin asks the hub for **Climate Type**, **Heat Setpoint**, and **Cool Setpoint** in one read. **Home**, **Away**, and **Sleep** replace that named row with the read. For an extra comfort, a pair that matches a row already saved is left alone. A new pair fills one extra comfort that is still blank, such as **Smart2** when **Smart1** already has values. **Query** does the same read by hand. An extra comfort that already has values is never replaced.
+5. Send **Climate Type** for that comfort again. The plugin writes the saved heat and cool, then places the hold. **Schedule Mode** becomes **Hold Next**. **Schedule Mode** **Running** resumes the program.
+
+Type **Heat setpoint** and **Cool setpoint** on an extra comfort yourself. Those numbers are what the next **Climate Type** command sends, and a later hub read does not replace them. Changing the temperatures of that comfort on the thermostat does not move it to another row and does not change the values already saved. A blank extra row can still be filled the first time a new pair is seen. **Home**, **Away**, and **Sleep** are the exception: the hub names them, so those three rows follow the latest read.
+
+**Heat setpoint** and **Cool setpoint** are kept across a Node Server restart. Restarting does not clear them. Comfort names on those rows are kept the same way. A restart does not put them back to **Home**, **Away**, or **Smart1**.
+
+| Source | What is stored |
 |--------|----------------|
-| **Startup / hub reconnect** | Automatic debounced snapshot per thermostat (same as **Query**) after the hub connects |
-| **Vendor snapshot** | Target heat/cool for **Home**, **Sleep**, and **Away** (`VENDOR_ECOBEE_*_TARGET_*`) |
-| **Learned signatures** | Heat/cool pairs for **Vacation**, **Away Extended**, custom Smart slots, etc., when the stat has been on that comfort (status or Ecobee app) |
-| **HK command index 3** | Maps to the first configured extra comfort on that stat (e.g. **Vacation** when **Smart1** is not in the program) |
+| **Startup / hub reconnect / Query** | **Home**, **Away**, and **Sleep** heat and cool, updated every time |
+| **Climate Type** changes to **Home**, **Away**, or **Sleep** | That named row is replaced with the hub read |
+| **Climate Type** or a heat/cool event for an extra comfort | One hub read. A new pair fills one blank extra comfort. A row that already has values is not changed |
+| **Values you type** on an extra comfort | Kept. A hub read does not replace them |
 
-**Home / Away / Sleep** commands use the hold byte only (Ecobee applies program setpoints). **Vacation**, **Away Extended**, and other Temp-slot comforts require cached setpoints; the command is rejected (IoX unchanged) until a snapshot or prior use has populated the cache.
-
-Extra comforts that have never been active on the stat may still need one activation from the **Ecobee app** (or cloud backend) before IoX can command them over HomeKit.
+**Climate Type** index **Smart1** is also the HomeKit **Temp** slot. If this thermostat has no **Smart1** program, that command selects the first extra comfort configured on the stat (often **Vacation**).
 
 ---
 
@@ -235,7 +246,7 @@ HomeKit thermostats use **`EcobeeHKC_*`** / **`EcobeeHKF_*`** (Celsius / Fahrenh
 
 In **Auto** mode, **Heat Setpoint** / **Cool Setpoint** commands enforce a minimum gap before writing to the hub so IoX matches the physical thermostat. Default gap is **3** degrees; set Custom Param **`hk_heat_cool_min_delta`** to **`2`** (or your Ecobee app **Compressor minimum delta**) when the stat allows a narrower range. Value is in the stat's display units (°F or °C per **`use_celsius`**).
 
-**Climate Type** **(HomeKit):** **Status** uses the full comfort label range with per-thermostat custom names. When the hub reports HAP byte **3** (Temp), status disambiguates **Vacation**, **Away Extended**, and other extra comforts using setpoint signatures (not always catalog **Smart1**). **Commands** use **CT_HK_*** indices **away (0), home (1), sleep (2), smart1 (3)**; index **3** maps to the first configured extra comfort when **smart1** is not on the stat. For Temp-slot and collision comforts, the plugin writes heat/cool setpoints before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
+**Climate Type** **(HomeKit):** **Status** uses the full comfort label range with per-thermostat custom names. When the hub reports HAP byte **3** (Temp), status disambiguates **Vacation**, **Away Extended**, and other extra comforts using setpoint signatures (not always catalog **Smart1**). **Commands** use **CT_HK_*** indices **home (0), away (1), sleep (2), smart1 (3)**; index **3** maps to the first configured extra comfort when **smart1** is not on the stat. For Temp-slot and collision comforts, the plugin writes heat/cool setpoints before the vendor hold. See [HomeKit Climate Type — commands and setpoints](#homekit-climate-type-commands-and-setpoints).
 
 **Schedule Mode** **(HomeKit):** **Running** sends the Ecobee vendor **clear hold** sequence on the hub and refreshes the thermostat snapshot. **Hold Next** (1) and **Hold Indefinite** (2) update the IoX driver only — HomeKit does not expose hold duration the way the cloud API does. **Heat Setpoint** / **Cool Setpoint** and **Climate Type** writes imply a hold (**Schedule Mode** becomes **Hold Next**); use **Schedule Mode** = **Running** to resume the programmed schedule.
 

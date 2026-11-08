@@ -343,9 +343,14 @@ class HomeKitBackend:
     def handler_typed_params(self, _data):
         return
 
+    def _stored_climate_names(self) -> Optional[Dict[str, Any]]:
+        raw = self.Data.get('climates')
+        return raw if isinstance(raw, dict) else None
+
     def _profile_climates_from_typed(self) -> Dict[str, List[Dict[str, str]]]:
         """Build profile writer input from typed **Climate program labels** rows."""
         rows_climate = self._typed_list(TYPED_CLIMATE_PROGRAMS)
+        stored_names = self._stored_climate_names()
         climates: Dict[str, List[Dict[str, str]]] = {}
         seen: set[str] = set()
         for row in rows_climate:
@@ -360,6 +365,7 @@ class HomeKitBackend:
                 tid,
                 device_id=did or None,
                 climate_catalog=climateList,
+                stored_climates=stored_names,
             )
             seen.add(tid)
         for node in self._thermostat_by_device.values():
@@ -372,9 +378,10 @@ class HomeKitBackend:
                 tid,
                 device_id=did or None,
                 climate_catalog=climateList,
+                stored_climates=stored_names,
             )
             seen.add(tid)
-        stored = self.Data.get('climates')
+        stored = stored_names
         if isinstance(stored, dict):
             for tid in stored:
                 tid_s = str(tid).strip()
@@ -383,6 +390,7 @@ class HomeKitBackend:
                         rows_climate,
                         tid_s,
                         climate_catalog=climateList,
+                        stored_climates=stored_names,
                     )
         return climates
 
@@ -784,6 +792,16 @@ class HomeKitBackend:
         ref = str(climate_ref or '').strip()
         if not ref:
             return
+        # Home, Away, and Sleep are named by the hub, so those rows follow the latest read.
+        # Any other comfort keeps heat/cool once they are set, including values the user typed.
+        saved = self.program_comfort_setpoints_for(str(thermostat_id)).get(ref)
+        if saved is not None:
+            from homekit_client.hap_apply import comfort_setpoint_key
+
+            if comfort_setpoint_key(*saved) == comfort_setpoint_key(float(heat), float(cool)):
+                return
+            if ref not in ('home', 'away', 'sleep'):
+                return
         all_sp: Dict[str, Dict[str, Dict[str, float]]] = {}
         raw = self.Data.get('climate_setpoints')
         if isinstance(raw, dict):
@@ -1225,11 +1243,20 @@ class HomeKitBackend:
             )
             pairs.append((dev, addr, key))
         try:
-            rows_climate = sync_climate_typed_store(
-                self.TypedData,
-                typed_specs,
-                climate_catalog=climateList,
-            )
+            if not getattr(self.dispatcher, '_typed_data_loaded', False):
+                LOGGER.warning(
+                    'HomeKit climate typed sync skipped; custom typed data has not loaded yet'
+                )
+            else:
+                stored_sp = self.Data.get('climate_setpoints')
+                stored_climates = self.Data.get('climates')
+                rows_climate = sync_climate_typed_store(
+                    self.TypedData,
+                    typed_specs,
+                    climate_catalog=climateList,
+                    stored_setpoints=stored_sp if isinstance(stored_sp, dict) else None,
+                    stored_climates=stored_climates if isinstance(stored_climates, dict) else None,
+                )
         except Exception:
             LOGGER.exception('HomeKit climate typed data sync failed')
         for _dev, _addr, key in pairs:
@@ -1239,9 +1266,15 @@ class HomeKitBackend:
                 key,
                 device_id=did,
                 climate_catalog=climateList,
+                stored_climates=self._stored_climate_names(),
             )
         try:
-            self._maybe_update_profile(climates)
+            if not getattr(self.dispatcher, '_typed_data_loaded', False):
+                LOGGER.warning(
+                    'HomeKit profile update skipped; custom typed data has not loaded yet'
+                )
+            else:
+                self._maybe_update_profile(climates)
         except Exception:
             LOGGER.exception('HomeKit profile update failed')
         use_c = self._use_celsius()
@@ -1583,6 +1616,62 @@ class HomeKitBackend:
                     LOGGER.debug('cancel thermostat snapshot timer failed', exc_info=True)
             self._thermostat_snapshot_timers.clear()
 
+    def _is_comfort_setpoint_event(self, characteristic: str) -> bool:
+        """Heat/cool threshold notifications. Climate Type itself often does not stream."""
+        u = str(characteristic or '').upper()
+        if 'TEMPERATURE_HEATING_THRESHOLD' in u or 'HEAT_TARGET' in u:
+            return True
+        if 'TEMPERATURE_COOLING_THRESHOLD' in u or 'COOL_TARGET' in u:
+            return True
+        return False
+
+    def request_comfort_setpoint_query(self, node: HomeKitThermostat) -> None:
+        """Read Climate Type and both setpoints once, then save that pair.
+
+        The 50 ms delay only merges the heat and cool events that arrive a few
+        milliseconds apart. It does not guess when the thermostat has finished.
+        """
+        node._hk_save_comfort_from_query = True
+        self._schedule_thermostat_debounced(
+            node,
+            lambda: self._run_comfort_setpoint_query(node),
+            0.05,
+        )
+
+    def _run_comfort_setpoint_query(self, node: HomeKitThermostat) -> None:
+        if self._ws is None:
+            return
+        did = str(node.device_id_hub or '').strip().lower()
+        if not did:
+            return
+        from homekit_client.hap_apply import (
+            hap_name_cooling_threshold,
+            hap_name_heating_threshold,
+        )
+
+        try:
+            values = self._get_values_with_retry(
+                did,
+                [
+                    hap_name_vendor_ecobee_current_mode(),
+                    hap_name_heating_threshold(),
+                    hap_name_cooling_threshold(),
+                ],
+            )
+        except Exception:
+            LOGGER.debug('comfort setpoint query failed for %s', did, exc_info=True)
+            return
+        if not values:
+            return
+        node._hk_in_comfort_query = True
+        try:
+            self._apply_snapshot_values(node, values)
+            if node._hk_save_comfort_from_query:
+                node.seed_comfort_setpoints_from_query()
+                node._hk_save_comfort_from_query = False
+        finally:
+            node._hk_in_comfort_query = False
+
     def _characteristic_warrants_thermostat_snapshot_refresh(self, characteristic: str) -> bool:
         """GV3 often does not stream; after setpoint/mode events, re-read ``VENDOR_ECOBEE_CURRENT_MODE`` via hub ``get``."""
         ch = str(characteristic or '').strip()
@@ -1702,7 +1791,9 @@ class HomeKitBackend:
             ms2 = self._motion_sensor_by_device.get(did)
             if ms2 is not None and builtin_motion_sensor_ambient_mirror(characteristic):
                 ms2.apply_hub_characteristic(characteristic, value)
-            if self._characteristic_warrants_thermostat_snapshot_refresh(characteristic):
+            if self._is_comfort_setpoint_event(characteristic):
+                self.request_comfort_setpoint_query(t)
+            elif self._characteristic_warrants_thermostat_snapshot_refresh(characteristic):
                 self._schedule_thermostat_snapshot_refresh(t)
         if applied:
             return
@@ -1905,6 +1996,7 @@ class HomeKitBackend:
                 except Exception:
                     pass
                 self._startup_refresh_timer = None
+        self._cancel_all_thermostat_snapshot_timers()
         self.close()
         self._thermostat_by_device.clear()
         self._thermostat_primary_aid.clear()

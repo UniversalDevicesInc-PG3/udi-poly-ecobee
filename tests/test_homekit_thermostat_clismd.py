@@ -33,6 +33,94 @@ def _make_node() -> HomeKitThermostat:
     return node
 
 
+def test_mode_change_requests_query_and_saves_only_when_it_returns():
+    """Climate Type change must not store the previous heat/cool. The query result does."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 0
+    node._hk_save_comfort_from_query = False
+    node._hk_in_comfort_query = False
+    node._configured_climate_refs = MagicMock(
+        return_value=['away', 'home', 'sleep', 'smart1', 'smart2']
+    )
+    drivers = {'CLISPH': 64.0, 'CLISPC': 82.0}
+    node.getDriver = lambda driver: drivers[driver]
+
+    node.hk_comfort_gv3_resolver(3)
+    node.hk.request_comfort_setpoint_query.assert_called_once_with(node)
+    node.hk.persist_comfort_setpoint.assert_not_called()
+    assert node._hk_save_comfort_from_query is True
+    assert node._hk_sp_sig_to_gv3 == {}
+
+    drivers['CLISPH'] = 70.0
+    drivers['CLISPC'] = 74.0
+    node._hk_save_comfort_from_query = False
+    node.seed_comfort_setpoints_from_query()
+    assert node._hk_gv3_to_sp[int(climateMap['smart1'])] == (70.0, 74.0)
+    assert int(climateMap['smart2']) not in node._hk_gv3_to_sp
+
+
+def test_new_temp_pair_fills_next_blank_comfort():
+    """Smart1's saved pair must stay put. A different Temp pair fills Smart2."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 3
+    node._hk_sp_sig_to_gv3 = {}
+    node._hk_gv3_to_sp = {}
+    node._configured_climate_refs = MagicMock(
+        return_value=['home', 'away', 'sleep', 'smart1', 'smart2']
+    )
+    node.hk.program_comfort_setpoints_for = MagicMock(return_value={'smart1': (45.0, 90.0)})
+    drivers = {'CLISPH': 63.0, 'CLISPC': 73.0}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_called_with(
+        '9243', 'smart2', 63.0, 73.0, device_id='dev-1'
+    )
+    node.set_driver_safe.assert_called_with('GV3', int(climateMap['smart2']))
+
+
+def test_saved_extra_comfort_is_not_overwritten():
+    """A new Temp pair must not replace Smart1 or Smart2 once both have values."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 3
+    node._configured_climate_refs = MagicMock(
+        return_value=['home', 'away', 'sleep', 'smart1', 'smart2']
+    )
+    node.hk.program_comfort_setpoints_for = MagicMock(
+        return_value={'smart1': (45.0, 90.0), 'smart2': (63.0, 73.0)}
+    )
+    drivers = {'CLISPH': 60.0, 'CLISPC': 80.0}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_not_called()
+    node.set_driver_safe.assert_not_called()
+
+
+def test_home_query_updates_a_saved_row():
+    """Home is named by the hub, so a later read replaces that row."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 0
+    node.hk.program_comfort_setpoints_for = MagicMock(return_value={'home': (64.0, 82.0)})
+    drivers = {'CLISPH': 68.0, 'CLISPC': 76.0}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_called_once_with(
+        '9243', 'home', 68.0, 76.0, device_id='dev-1'
+    )
+
+
+def test_home_query_writes_configuration_row():
+    """Home, Away, and Sleep drivers must be copied onto that comfort's configuration row."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 0
+    node._hk_vendor_partial = {}
+    drivers = {'CLISPH': 68.0, 'CLISPC': 76.0}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_called_once_with(
+        '9243', 'home', 68.0, 76.0, device_id='dev-1'
+    )
+
+
 def test_hap_clear_hold_names_and_wire_sequence():
     assert hap_name_vendor_ecobee_clear_hold() == 'VENDOR_ECOBEE_CLEAR_HOLD'
     assert vendor_ecobee_clear_hold_wire_values() == (False, True)

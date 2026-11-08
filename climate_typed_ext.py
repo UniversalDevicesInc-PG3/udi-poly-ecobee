@@ -9,8 +9,8 @@ from climate_typed import (
     TYPED_CLIMATE_PROGRAMS,
     _DEFAULT_SEED_REFS,
     _api_climate_map,
-    _climate_name_is_default,
     _climate_ref_from_row,
+    _climate_ref_sequence,
     _thermostat_row_key,
     _typed_climate_program_rows,
     climateMap,
@@ -143,15 +143,11 @@ def _merge_climate_list_preserve_setpoints(
 
     seed_refs = list(api.keys()) if api else [r for r in _DEFAULT_SEED_REFS if r in climateMap]
     for ref in seed_refs:
-        api_name = api.get(ref, '')
-        if ref not in by_ref:
-            by_ref[ref] = {'climateRef': ref, 'name': api_name or default_climate_label(ref)}
-            changed = True
+        if ref in by_ref:
             continue
-        cur = by_ref[ref]['name']
-        if api_name and _climate_name_is_default(ref, cur) and cur != api_name:
-            by_ref[ref]['name'] = api_name
-            changed = True
+        api_name = api.get(ref, '')
+        by_ref[ref] = {'climateRef': ref, 'name': api_name or default_climate_label(ref)}
+        changed = True
 
     ordered: List[Dict[str, str]] = []
     seen: set[str] = set()
@@ -224,7 +220,7 @@ def ensure_climate_typed_data_preserve_setpoints(
             api_climates=api_climates,
             climate_catalog=climate_catalog,
         )
-        if c_changed:
+        if c_changed or _climate_ref_sequence(row.get('climates')) != _climate_ref_sequence(climates):
             row['climates'] = climates
             changed = True
         elif row.get('climates') != climates:
@@ -237,26 +233,117 @@ def ensure_climate_typed_data_preserve_setpoints(
     return out, changed
 
 
+def fill_blank_comfort_setpoints(
+    rows: List[Dict[str, Any]],
+    stored_setpoints: Optional[Mapping[str, Any]],
+) -> bool:
+    """Copy ``customData.climate_setpoints`` onto comfort rows whose heat/cool are blank.
+
+    A value already on the row is left alone. Returns True when a row changed.
+    """
+    if not stored_setpoints:
+        return False
+    changed = False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tid = str(row.get('thermostat_id', '') or '').strip()
+        block = stored_setpoints.get(tid) if tid else None
+        if not isinstance(block, dict):
+            continue
+        climates = row.get('climates')
+        if not isinstance(climates, list):
+            continue
+        for entry in climates:
+            if not isinstance(entry, dict):
+                continue
+            ref = str(entry.get('climateRef', '') or entry.get('ref', '') or '').strip()
+            sp = block.get(ref)
+            if not isinstance(sp, dict):
+                continue
+            for band in ('heat', 'cool'):
+                if str(entry.get(band, '') or '').strip():
+                    continue
+                raw = sp.get(band)
+                if raw is None or str(raw).strip() == '':
+                    continue
+                try:
+                    entry[band] = str(float(raw))
+                except (TypeError, ValueError):
+                    continue
+                changed = True
+    return changed
+
+
+def restore_blank_climate_names(
+    rows: List[Dict[str, Any]],
+    stored_climates: Optional[Mapping[str, Any]],
+) -> bool:
+    """Fill an empty comfort name from ``customData.climates``. A name already set is kept."""
+    if not isinstance(stored_climates, Mapping):
+        return False
+    changed = False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tid = str(row.get('thermostat_id', '') or '').strip()
+        block = stored_climates.get(tid) if tid else None
+        if not isinstance(block, list):
+            continue
+        by_ref: Dict[str, str] = {}
+        for item in block:
+            if not isinstance(item, dict):
+                continue
+            ref = str(item.get('ref', '') or item.get('climateRef', '') or '').strip()
+            name = str(item.get('name', '') or '').strip()
+            if ref and name:
+                by_ref[ref] = name
+        climates = row.get('climates')
+        if not isinstance(climates, list):
+            continue
+        for entry in climates:
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get('name', '') or '').strip():
+                continue
+            ref = str(entry.get('climateRef', '') or entry.get('ref', '') or '').strip()
+            stored_name = by_ref.get(ref)
+            if not stored_name:
+                continue
+            entry['name'] = stored_name
+            changed = True
+    return changed
+
+
 def sync_climate_typed_store(
     typed_data: Any,
     thermostats: Iterable[Mapping[str, object]],
     *,
     climate_catalog: Sequence[str] = DEFAULT_CLIMATE_CATALOG,
+    stored_setpoints: Optional[Mapping[str, Any]] = None,
+    stored_climates: Optional[Mapping[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Ensure nested climate typed rows exist and persist when changed.
 
     Preserves hub-learned ``heat`` / ``cool`` during merge so repeated hub syncs do not
     spuriously rewrite typed data (which would echo back through ``handler_typed_data``).
+    Blank heat/cool are filled from ``stored_setpoints`` (``customData.climate_setpoints``).
+    An existing comfort name is kept. A blank name is filled from ``stored_climates``.
     """
     td = typed_data_dict(typed_data)
     existing = td.get(TYPED_CLIMATE_PROGRAMS)
+    existing_rows = existing if isinstance(existing, list) else None
+    filled = False
+    if existing_rows is not None:
+        filled = fill_blank_comfort_setpoints(existing_rows, stored_setpoints)
+        filled = restore_blank_climate_names(existing_rows, stored_climates) or filled
     rows, changed = ensure_climate_typed_data_preserve_setpoints(
-        existing if isinstance(existing, list) else None,
+        existing_rows,
         thermostats,
         climate_catalog=climate_catalog,
     )
-    if changed:
+    if changed or filled:
         td[TYPED_CLIMATE_PROGRAMS] = rows
         typed_data.load(td, save=True)
     return rows

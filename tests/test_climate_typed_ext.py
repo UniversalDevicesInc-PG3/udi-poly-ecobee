@@ -34,6 +34,42 @@ def test_sync_learned_setpoint_in_typed_store_writes_heat_cool():
     assert smart1['cool'] == '74.0'
 
 
+def test_sync_climate_typed_store_restores_blank_heat_cool_from_stored():
+    """A restart must not leave learned heat/cool blank when custom data still has them."""
+    programs = [
+        {
+            'thermostat_id': '411956665463',
+            'name': 'JimBo Dev',
+            'device_id': '34:29:62:b4:da:31',
+            'climates': [
+                {'climateRef': 'away', 'name': 'Away'},
+                {'climateRef': 'home', 'name': 'Home', 'heat': '70', 'cool': '78'},
+            ],
+        }
+    ]
+    store = MagicMock()
+    store.keys.return_value = ['climate_programs']
+    store.__getitem__.side_effect = lambda k: {'climate_programs': programs}[k]
+    sync_climate_typed_store(
+        store,
+        [{'thermostat_id': '411956665463', 'name': 'JimBo Dev', 'device_id': '34:29:62:b4:da:31'}],
+        stored_setpoints={
+            '411956665463': {
+                'away': {'heat': 68, 'cool': 76},
+                'home': {'heat': 64, 'cool': 82},
+            }
+        },
+    )
+    store.load.assert_called_once()
+    saved = store.load.call_args[0][0]['climate_programs'][0]['climates']
+    away = next(c for c in saved if c['climateRef'] == 'away')
+    home = next(c for c in saved if c['climateRef'] == 'home')
+    assert away['heat'] == '68.0'
+    assert away['cool'] == '76.0'
+    assert home['heat'] == '70'
+    assert home['cool'] == '78'
+
+
 def test_sync_climate_typed_store_preserves_learned_setpoints():
     store = MagicMock()
     store.keys.return_value = ['climate_programs']

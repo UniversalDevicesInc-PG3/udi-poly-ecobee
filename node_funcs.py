@@ -96,8 +96,8 @@ def ltom(list):
 #  https://www.ecobee.com/home/developer/api/documentation/v1/objects/Program.shtml
 # And add unknown since some code relies on that name existing.
 climateList = [
-    'away',
     'home',
+    'away',
     'sleep',
     'smart1',
     'smart2',
