@@ -7,6 +7,12 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-11-14
+
+### Fixed
+
+- **Home, Away, and Sleep during a hold:** the live **Heat Setpoint** and **Cool Setpoint** are not copied onto those rows while **Schedule Mode** is a hold. A hold on the thermostat can still report **Home** while the setpoints are the hold; that pair is not stored when it differs from the hub's named **Home**, **Away**, or **Sleep** target. Those named targets still update the rows.
+
 ## [4.2.0] - 2026-11-08
 
 ### Fixed

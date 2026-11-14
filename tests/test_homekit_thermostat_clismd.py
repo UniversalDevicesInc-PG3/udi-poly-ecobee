@@ -96,16 +96,39 @@ def test_saved_extra_comfort_is_not_overwritten():
 
 
 def test_home_query_updates_a_saved_row():
-    """Home is named by the hub, so a later read replaces that row."""
+    """Home is named by the hub, so a later read replaces that row while the schedule is running."""
     node = _make_node()
     node._hk_last_comfort_byte = 0
     node.hk.program_comfort_setpoints_for = MagicMock(return_value={'home': (64.0, 82.0)})
-    drivers = {'CLISPH': 68.0, 'CLISPC': 76.0}
+    drivers = {'CLISPH': 68.0, 'CLISPC': 76.0, 'CLISMD': 0}
     node.getDriver = lambda driver: drivers[driver]
     node.seed_comfort_setpoints_from_query()
     node.hk.persist_comfort_setpoint.assert_called_once_with(
         '9243', 'home', 68.0, 76.0, device_id='dev-1'
     )
+
+
+def test_home_query_skips_live_setpoints_during_a_hold():
+    """A hold's heat/cool are not the Home comfort, so the Home row stays as saved."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 0
+    node._hk_vendor_comfort_sp = {'home': (73.0, 78.0)}
+    drivers = {'CLISPH': 71.0, 'CLISPC': 78.0, 'CLISMD': 1}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_not_called()
+    assert node._hk_vendor_comfort_sp['home'] == (73.0, 78.0)
+
+
+def test_home_query_skips_live_setpoints_that_differ_from_named_targets():
+    """A device hold still reports Home while the setpoints are the hold."""
+    node = _make_node()
+    node._hk_last_comfort_byte = 0
+    node._hk_vendor_comfort_sp = {'home': (73.0, 78.0)}
+    drivers = {'CLISPH': 71.0, 'CLISPC': 78.0, 'CLISMD': 0}
+    node.getDriver = lambda driver: drivers[driver]
+    node.seed_comfort_setpoints_from_query()
+    node.hk.persist_comfort_setpoint.assert_not_called()
 
 
 def test_home_query_writes_configuration_row():

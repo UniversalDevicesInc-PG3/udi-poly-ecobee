@@ -51,7 +51,7 @@ HomeKit does **not** expose Ecobee comfort **names** (only a comfort byte plus c
    - `smart2` … `smart7` for additional custom comforts
 4. **Save** typed data — the plugin rebuilds the IoX profile and pushes it automatically; the **Climate Type** command list updates with your display names.
 
-**Home**, **Away**, and **Sleep** heat and cool are updated from the hub whenever that comfort is read. For every other comfort, type **Heat** and **Cool** yourself, or leave the row blank and the plugin fills it once. Those extra-comfort values are never replaced. Comfort names and setpoints stay in place across a Node Server restart.
+**Home**, **Away**, and **Sleep** heat and cool are updated from the hub's named targets for those comforts. While **Schedule Mode** is a hold, the live setpoints are not copied onto those rows. For every other comfort, type **Heat** and **Cool** yourself, or leave the row blank and the plugin fills it once. Those extra-comfort values are never replaced. Comfort names and setpoints stay in place across a Node Server restart.
 
 **How commands work**
 
@@ -60,7 +60,7 @@ HomeKit does **not** expose Ecobee comfort **names** (only a comfort byte plus c
 | Home, Away, Sleep | Vendor hold byte only (setpoints come from the hub program). |
 | Custom (Smart1–Smart7, Vacation, …) | Plugin writes learned heat/cool to the hub, then places the hold. |
 
-If a custom comfort has no setpoints yet, type them on that row, or switch the thermostat to that comfort while the row is still blank. The plugin then reads **Climate Type**, **Heat Setpoint**, and **Cool Setpoint** together and fills one blank row. An extra comfort that already has values is left as you left it. **Home**, **Away**, and **Sleep** are updated from that same read. Refresh the configuration page to see a newly filled blank row.
+If a custom comfort has no setpoints yet, type them on that row, or switch the thermostat to that comfort while the row is still blank. The plugin then reads **Climate Type**, **Heat Setpoint**, and **Cool Setpoint** together and fills one blank row. An extra comfort that already has values is left as you left it. **Home**, **Away**, and **Sleep** are updated from the hub's named targets. A hold does not replace those rows with the live setpoints. Refresh the configuration page to see a newly filled blank row.
 
 On hub connect and Node Server start, each HomeKit thermostat automatically runs a debounced hub snapshot (same as **Query**) to cache comfort setpoints for **Climate Type** commands.
 

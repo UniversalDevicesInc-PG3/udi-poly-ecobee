@@ -257,6 +257,26 @@ class HomeKitThermostat(Node):
             return self.hk.program_comfort_setpoints_for(self.thermostat_id)
         return {}
 
+    def _live_setpoints_follow_named_comfort(self, ref: str, heat: float, cool: float) -> bool:
+        """True when the current heat/cool are that comfort's program, not a hold.
+
+        HomeKit does not report a hold placed on the thermostat. Schedule Mode is a hold
+        after this plugin places one. Otherwise the live drivers are the program only when
+        they match the named Home, Away, or Sleep targets. A different pair is the hold
+        (or a custom-comfort write that has not changed the mode byte yet).
+        """
+        try:
+            if int(float(self.getDriver('CLISMD'))) != 0:
+                return False
+        except (TypeError, ValueError, KeyError):
+            pass
+        vendor = getattr(self, '_hk_vendor_comfort_sp', {}).get(ref)
+        if vendor is None:
+            return True
+        return hap_apply.comfort_setpoint_key(*vendor) == hap_apply.comfort_setpoint_key(
+            heat, cool
+        )
+
     def seed_comfort_setpoints_from_query(self) -> None:
         """After hub snapshot, seed GV3→setpoint cache from program + vendor targets."""
         from ecobee_program import seed_gv3_to_sp_from_comfort_maps
@@ -298,7 +318,8 @@ class HomeKitThermostat(Node):
             cool = float(self.getDriver('CLISPC'))
         except (TypeError, ValueError):
             return
-        self._hk_vendor_comfort_sp[ref] = (heat, cool)
+        if not self._live_setpoints_follow_named_comfort(ref, heat, cool):
+            return
         self._hk_gv3_to_sp[int(gv3)] = (heat, cool)
         self.hk.persist_comfort_setpoint(
             self.thermostat_id,
